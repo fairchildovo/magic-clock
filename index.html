@@ -28,16 +28,17 @@
 
         :root {
             background-color: #000000;
-            --safe-top: env(safe-area-inset-top);
-            --safe-bottom: env(safe-area-inset-bottom);
         }
 
         html {
             background-color: #000000;
-            height: 100%;
-            width: 100%;
+            /* 强制全屏，忽略浏览器地址栏计算 */
+            height: 100dvh; 
+            width: 100vw;
             overflow: hidden;
             position: fixed;
+            top: 0;
+            left: 0;
         }
         
         body {
@@ -50,23 +51,24 @@
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: manipulation;
+            touch-action: none; /* 禁止 iOS 回弹效果 */
             font-family: 'Inter', sans-serif;
-            box-sizing: border-box;
+            position: fixed; /* 锁死 body 位置 */
+            inset: 0;
         }
         
+        /* 背景必须铺满，不顾及安全区域 */
         .bg-gradient-radial {
             background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
-            position: relative;
+            position: absolute;
+            inset: 0;
+            z-index: 0;
         }
 
         .bg-gradient-radial::before {
             content: "";
             position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
+            inset: 0;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
             opacity: 0.4;
             pointer-events: none;
@@ -204,13 +206,21 @@
         .dot { transition: background-color 0.2s; }
         .dot.filled { background-color: white; }
 
-        .safe-padding-top { padding-top: var(--safe-top); }
-        .safe-padding-bottom { padding-bottom: var(--safe-bottom); }
+        /* 特别针对 iOS PWA 的底部修正 */
+        .bottom-safe-area {
+            /* 强制将内容推到底部，padding 为安全区域高度 */
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        
+        .top-safe-area {
+             /* 顶部安全区域 + 额外的一点偏移，适配灵动岛 */
+             padding-top: calc(env(safe-area-inset-top) + 10px);
+        }
     </style>
 </head>
-<body class="h-screen w-screen bg-gradient-radial flex flex-col relative">
+<body class="bg-gradient-radial">
 
-    <!-- Main Interactive Grid -->
+    <!-- Main Interactive Grid (Z-Index 10) -->
     <div class="absolute inset-0 grid grid-cols-2 grid-rows-2 z-10">
         <div id="area-spades" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="spades"></div>
         <div id="area-hearts" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="hearts"></div>
@@ -218,12 +228,11 @@
         <div id="area-diamonds" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="diamonds"></div>
     </div>
 
-    <!-- Lock Screen UI -->
-    <!-- 修正：只保留 safe-padding-top，底部间距由内部子元素控制，防止叠加 -->
-    <div id="lock-screen-ui" class="absolute inset-0 z-20 transition-all duration-500 ease-in-out pointer-events-none flex flex-col justify-between safe-padding-top">
+    <!-- UI Layer: 绝对分离顶部和底部，不再使用 Flex justify-between 以避免位移 -->
+    <div id="lock-screen-ui" class="absolute inset-0 z-20 pointer-events-none">
         
-        <!-- Top Content -->
-        <div class="flex flex-col items-center pt-8 md:pt-12">
+        <!-- Top Section: 绝对定位于顶部 -->
+        <div class="absolute top-0 left-0 right-0 flex flex-col items-center top-safe-area transition-all duration-500">
             <div id="date-display" class="ios-lock-date text-lg md:text-xl mb-2">Monday, June 3</div>
             <div class="flex items-baseline gap-2">
                 <div id="clock-time" class="ios-lock-time text-7xl md:text-9xl">09:41</div>
@@ -231,24 +240,26 @@
             </div>
         </div>
 
-        <!-- Bottom iOS Actions -->
-        <!-- 修正：使用 inline style 精确计算底部安全距离，让图标贴近系统 Home Indicator -->
-        <div class="w-full px-12 flex justify-between items-center relative" style="padding-bottom: calc(env(safe-area-inset-bottom) + 8px);">
-            <div class="ios-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-            </div>
-            
-            <!-- Swipe Indicator (固定沉底) -->
-            <div class="absolute left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40" style="bottom: 8px;"></div>
-            
-            <div class="ios-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+        <!-- Bottom Section: 绝对定位于底部 -->
+        <div class="absolute bottom-0 left-0 right-0 px-12 transition-all duration-500 bottom-safe-area">
+            <!-- 图标容器：位于安全区域上方一点点 -->
+            <div class="flex justify-between items-end w-full mb-1">
+                <div class="ios-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                </div>
+                
+                <div class="ios-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                </div>
             </div>
         </div>
+
+        <!-- Home Indicator: 独立于所有布局，强制在最底部 -->
+        <div class="absolute bottom-[6px] left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40 z-30"></div>
     </div>
 
-    <!-- Passcode Screen -->
-    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center pt-[15vh] safe-padding-top text-white">
+    <!-- Passcode Screen (Z-Index 40) -->
+    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center top-safe-area pt-12 text-white">
         <div class="text-sm md:text-base mb-8 tracking-wide">Enter Passcode</div>
         <div class="flex gap-6 mb-20">
             <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
@@ -273,8 +284,8 @@
         <button id="cancel-passcode" class="mt-12 text-base font-medium tracking-wide hover:opacity-70 transition-opacity pb-8">Cancel</button>
     </div>
 
-    <!-- Result Overlay -->
-    <div id="result-overlay" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-3xl perspective-container flex flex-col items-center justify-center p-4 transition-opacity duration-500 opacity-0 safe-padding-bottom">
+    <!-- Result Overlay (Z-Index 50) -->
+    <div id="result-overlay" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-3xl perspective-container flex flex-col items-center justify-center p-4 transition-opacity duration-500 opacity-0">
         <div id="card-container" class="playing-card w-[85vw] max-w-[300px] h-[420px] md:w-[360px] md:h-[520px] relative overflow-hidden select-none">
             <div class="absolute inset-0 card-texture z-0"></div>
             <div class="card-inner-border"></div>
@@ -413,7 +424,9 @@
 
         function showPasscodeScreen() {
             isPasscodeActive = true;
-            lockScreenUi.style.transform = 'translateY(-100vh)'; lockScreenUi.style.opacity = '0';
+            lockScreenUi.style.opacity = '0';
+            // 使用 translate 移除界面，避免 absolute 定位干扰
+            lockScreenUi.style.transform = 'translateY(-100vh)';
             passcodeScreen.classList.remove('translate-y-full'); passcodeScreen.classList.add('translate-y-0');
             document.querySelectorAll('.quadrant').forEach(q => q.style.pointerEvents = 'none');
         }
