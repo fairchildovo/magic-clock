@@ -2,20 +2,20 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <!-- 关键：viewport-fit=cover 让网页占满全屏，包括刘海和底部Home条区域 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Magic Clock</title>
     
-    <!-- PWA 设置 -->
+    <!-- iOS Web App Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- 关键：设置为 black-translucent 让内容能延伸到状态栏下方 -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-title" content="Magic Clock">
     
-    <!-- 已修改：恢复使用 PNG 图标 -->
+    <!-- App Icon (Modified to use PNG) -->
+    <link rel="icon" type="image/png" href="icon.png">
     <link rel="apple-touch-icon" href="icon.png">
-    <!-- 如果你有 manifest.json，建议也加回来，没有的话可以忽略 -->
+    
+    <!-- Manifest File -->
     <link rel="manifest" href="manifest.json">
 
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -23,84 +23,54 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Italiana&display=swap');
 
+        /* Force black background immediately for iOS Status Bar */
         :root {
             background-color: #000000;
         }
 
-        /* 重置 HTML 和 BODY，确保无滚动且全屏 */
         html {
             background-color: #000000;
             height: 100%;
             width: 100%;
             overflow: hidden;
-            -webkit-text-size-adjust: 100%;
+            position: fixed; /* Lock body to prevent bounce */
         }
-        
         body {
             background-color: #000000;
+            height: 100%;
+            width: 100%;
             margin: 0;
             padding: 0;
-            width: 100%;
-            height: 100%;
+            color: #fff;
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none; /* 禁止浏览器默认手势 */
+            touch-action: manipulation;
             font-family: 'Inter', sans-serif;
-            color: #fff;
-            /* 关键：Body本身不设padding，让子元素去处理安全区域，否则背景会断层 */
-            position: fixed;
-            inset: 0;
+            /* Ensure content extends under status bar */
+            padding-top: env(safe-area-inset-top); 
+            padding-bottom: env(safe-area-inset-bottom);
+            box-sizing: border-box;
         }
         
-        /* 1. 独立的背景层：忽略安全区域，强制铺满物理屏幕 */
-        #app-background {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 0; /* 最底层 */
+        /* Deep Ambient Background - Darker */
+        .bg-gradient-radial {
             background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
-            /* 噪点纹理 */
+            position: relative;
         }
 
-        #app-background::before {
+        /* Subtle animated grain for texture */
+        .bg-gradient-radial::before {
             content: "";
             position: absolute;
-            inset: 0;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
             opacity: 0.4;
             pointer-events: none;
             animation: grain 8s steps(10) infinite;
-        }
-
-        /* 2. 交互层：同样铺满全屏，确保边缘也能点击 */
-        #interactive-layer {
-            position: fixed;
-            inset: 0;
-            z-index: 10;
-        }
-
-        /* 3. UI 层：处理安全区域 (Safe Area) */
-        /* 这个容器负责让时间、按钮避开刘海和底部黑条 */
-        .safe-area-container {
-            padding-top: max(20px, env(safe-area-inset-top));
-            padding-bottom: max(20px, env(safe-area-inset-bottom));
-            height: 100%;
-            width: 100%;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            position: relative;
-            z-index: 20;
-            pointer-events: none; /* 让点击穿透到底下的交互层 */
-        }
-        
-        /* 恢复指针事件给具体的按钮 */
-        .safe-area-container .pointer-events-auto {
-            pointer-events: auto;
         }
 
         @keyframes grain {
@@ -120,8 +90,12 @@
             transition: background-color 0.2s ease;
             position: relative;
             overflow: hidden;
-            height: 100%;
-            width: 100%;
+            /* Invisible click zones */
+        }
+        
+        /* Click Feedback Ripple - Removed per request */
+        .quadrant::after {
+            content: none;
         }
 
         /* Clock Styling */
@@ -144,6 +118,94 @@
             pointer-events: none;
         }
 
+        /* Analog Clock Styling (Widget Style) */
+        .analog-clock {
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            background: rgba(30, 30, 30, 0.4);
+            backdrop-filter: blur(8px);
+            flex-shrink: 0;
+            pointer-events: none; /* Ensure clicks pass through */
+        }
+
+        .clock-face-marker {
+            position: absolute;
+            width: 2px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.3);
+            left: 50%;
+            top: 10px;
+            transform-origin: 50% 140px; /* 150px radius - 10px top offset */
+        }
+
+        .hand {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            border-radius: 4px;
+            z-index: 22;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+
+        .hand-hour {
+            width: 4px;
+            height: 35px;
+            background: #fff;
+        }
+
+        .hand-minute {
+            width: 3px;
+            height: 50px;
+            background: #ccc;
+        }
+
+        .hand-second {
+            width: 1px;
+            height: 55px;
+            background: #ff9f0a; /* iOS Amber */
+            z-index: 23;
+        }
+
+        .hand-second::after {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: -2.5px;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: #ff9f0a;
+        }
+
+        .center-nut {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 24;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        }
+        
+        .clock-face-marker {
+            position: absolute;
+            width: 2px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.4);
+            left: 50%;
+            top: 5px;
+            transform-origin: 50% 63px; /* 70px radius - 7px offset */
+        }
+
+        /* iOS Bottom Icons */
         .ios-icon {
             width: 50px;
             height: 50px;
@@ -158,10 +220,17 @@
         }
 
         /* Card styling */
-        .perspective-container { perspective: 1200px; }
+        .perspective-container {
+            perspective: 1200px;
+        }
+
         .playing-card {
-            background: #fdfbf7;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2), 0 10px 20px rgba(0,0,0,0.3), 0 30px 60px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.05);
+            background: #fdfbf7; /* Warm off-white paper */
+            box-shadow: 
+                0 2px 5px rgba(0,0,0,0.2),
+                0 10px 20px rgba(0,0,0,0.3),
+                0 30px 60px rgba(0,0,0,0.5),
+                inset 0 0 60px rgba(0,0,0,0.05); /* Inner vignette */
             border-radius: 18px;
             position: relative;
             transform-style: preserve-3d;
@@ -170,299 +239,804 @@
             transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
             border: 1px solid #dcdcdc;
         }
-        .playing-card.revealed { transform: rotateY(0deg) rotateZ(1deg) translateY(-20px); }
+        
+        .playing-card.revealed {
+            transform: rotateY(0deg) rotateZ(1deg) translateY(-20px);
+        }
+
+        /* Premium Card Texture - Linen Finish */
         .card-texture {
             background-color: transparent;
-            background-image: linear-gradient(45deg, rgba(0,0,0,0.02) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.02) 75%, rgba(0,0,0,0.02)), linear-gradient(45deg, rgba(0,0,0,0.02) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.02) 75%, rgba(0,0,0,0.02));
+            background-image: 
+                linear-gradient(45deg, rgba(0,0,0,0.02) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.02) 75%, rgba(0,0,0,0.02)),
+                linear-gradient(45deg, rgba(0,0,0,0.02) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.02) 75%, rgba(0,0,0,0.02));
             background-size: 4px 4px;
             background-position: 0 0, 2px 2px;
             opacity: 0.6;
         }
-        .card-inner-border { position: absolute; inset: 12px; border: 2px solid #c5a059; border-radius: 10px; pointer-events: none; z-index: 5; box-shadow: inset 0 0 10px rgba(197, 160, 89, 0.2); }
-        .corner-decor { position: absolute; width: 10px; height: 10px; border: 2px solid #c5a059; z-index: 6; }
+
+        /* Inner Golden Border */
+        .card-inner-border {
+            position: absolute;
+            inset: 12px;
+            border: 2px solid #c5a059; /* Gold */
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 5;
+            box-shadow: inset 0 0 10px rgba(197, 160, 89, 0.2);
+        }
+
+        /* Detailed Corner Decoration */
+        .corner-decor {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border: 2px solid #c5a059;
+            z-index: 6;
+        }
         .corner-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; border-radius: 10px 0 0 0; }
         .corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; border-radius: 0 10px 0 0; }
         .corner-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; border-radius: 0 0 0 10px; }
         .corner-br { bottom: 12px; right: 12px; border-left: none; border-top: none; border-radius: 0 0 10px 0; }
-        .rank-font { font-family: 'Cinzel', serif; font-weight: 900; }
+
+        /* Rank Typography */
+        .rank-font {
+            font-family: 'Cinzel', serif;
+            font-weight: 900;
+        }
+
         .suit-colors-black { color: #1a1a1a; }
-        .suit-colors-red { color: #b91c1c; }
-        .center-suit-container { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 10; }
-        .big-suit { font-size: 8rem; line-height: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
-        @media (min-width: 768px) { .big-suit { font-size: 12rem; } }
-        .royal-pattern { position: absolute; inset: 30px; opacity: 0.08; background-image: radial-gradient(circle, currentColor 1px, transparent 1px); background-size: 10px 10px; z-index: 1; }
-        .particle { position: absolute; pointer-events: none; animation: pop-particle 1.2s cubic-bezier(0, 0.9, 0.57, 1) forwards; opacity: 0; z-index: 60; }
-        @keyframes pop-particle { 0% { transform: translate(0, 0) rotate(0deg) scale(0.5); opacity: 1; } 50% { opacity: 1; } 100% { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(0); opacity: 0; } }
-        
+        .suit-colors-red { color: #b91c1c; } /* Deeper red */
+
+        /* Center Suit Styles */
+        .center-suit-container {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .big-suit {
+            font-size: 8rem;
+            line-height: 1;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+        }
+
+        @media (min-width: 768px) {
+            .big-suit { font-size: 12rem; }
+        }
+
+        /* Decorative background pattern inside card for Royals */
+        .royal-pattern {
+            position: absolute;
+            inset: 30px;
+            opacity: 0.08;
+            background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+            background-size: 10px 10px;
+            z-index: 1;
+        }
+
+        /* Confetti Effect */
+        .particle {
+            position: absolute;
+            pointer-events: none;
+            animation: pop-particle 1.2s cubic-bezier(0, 0.9, 0.57, 1) forwards;
+            opacity: 0;
+            z-index: 60;
+        }
+
+        @keyframes pop-particle {
+            0% { transform: translate(0, 0) rotate(0deg) scale(0.5); opacity: 1; }
+            50% { opacity: 1; }
+            100% { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(0); opacity: 0; }
+        }
+
         /* Close Button Style */
-        .glass-btn { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.8rem; padding: 1rem 2.5rem; border-radius: 9999px; transition: all 0.3s ease; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        .glass-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; transform: translateY(-2px); box-shadow: 0 0 30px rgba(255, 255, 255, 0.1); }
-        .keypad-btn { width: 75px; height: 75px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background 0.2s; border: none; outline: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-        .keypad-btn:active { background: rgba(255, 255, 255, 0.4); }
-        .dot { transition: background-color 0.2s; } .dot.filled { background-color: white; }
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            padding: 1rem 2.5rem;
+            border-radius: 9999px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .glass-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+        }
+
+        /* Keypad Button Styling */
+        .keypad-btn {
+            width: 75px;
+            height: 75px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .keypad-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        .dot {
+            transition: background-color 0.2s;
+        }
+        
+        .dot.filled {
+            background-color: white;
+        }
     </style>
 </head>
-<body>
+<body class="h-screen w-screen bg-gradient-radial flex flex-col relative">
 
-    <!-- 1. 背景层 (独立，铺满全屏) -->
-    <div id="app-background"></div>
+    <!-- Main Interactive Grid (Z-Index 10) -->
+    <div class="absolute inset-0 grid grid-cols-2 grid-rows-2 z-10">
+        <!-- Top Left: Spades (Black) -->
+        <div id="area-spades" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="spades">
+        </div>
 
-    <!-- 2. 交互点击层 (铺满全屏，无安全区域限制) -->
-    <div id="interactive-layer" class="grid grid-cols-2 grid-rows-2">
-        <div id="area-spades" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="spades"></div>
-        <div id="area-hearts" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="hearts"></div>
-        <div id="area-clubs" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="clubs"></div>
-        <div id="area-diamonds" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="diamonds"></div>
+        <!-- Top Right: Hearts (Red) -->
+        <div id="area-hearts" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="hearts">
+        </div>
+
+        <!-- Bottom Left: Clubs (Black) -->
+        <div id="area-clubs" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="clubs">
+        </div>
+
+        <!-- Bottom Right: Diamonds (Red) -->
+        <div id="area-diamonds" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="diamonds">
+        </div>
     </div>
 
-    <!-- 3. UI 锁定层 (处理安全区域) -->
-    <div id="lock-screen-ui" class="absolute inset-0 z-20 transition-all duration-500 ease-in-out safe-area-container">
+    <!-- Lock Screen Container -->
+    <div id="lock-screen-ui" class="absolute inset-0 z-20 transition-all duration-500 ease-in-out pointer-events-none">
         
-        <!-- 上部内容：时间 -->
-        <div class="flex flex-col items-center pt-8 md:pt-16 w-full">
-            <div id="date-display" class="ios-lock-date text-lg md:text-xl mb-2">Monday, June 3</div>
+        <!-- Content -->
+        <div class="flex flex-col items-center pt-[15vh]">
+            <!-- Date -->
+            <div id="date-display" class="ios-lock-date text-lg md:text-xl mb-2">
+                Monday, June 3
+            </div>
+
+            <!-- Digital Clock (HH:MM) -->
             <div class="flex items-baseline gap-2">
-                <div id="clock-time" class="ios-lock-time text-7xl md:text-9xl">09:41</div>
-                <div id="clock-seconds" class="ios-lock-time text-3xl md:text-4xl opacity-70 font-normal">11</div>
+                <div id="clock-time" class="ios-lock-time text-7xl md:text-9xl">
+                    09:41
+                </div>
+                <!-- Magic Seconds (Smaller, blended) -->
+                <div id="clock-seconds" class="ios-lock-time text-3xl md:text-4xl opacity-70 font-normal">
+                    11
+                </div>
             </div>
         </div>
 
-        <!-- 底部内容：图标与白条 -->
-        <!-- 注意：这里使用 padding/margin 来确保不贴底，而不是依赖背景 -->
-        <div class="w-full px-12 pb-4 md:pb-8 flex justify-between items-end relative">
-            <!-- 左下角图标 -->
-            <div class="ios-icon pointer-events-auto">
+        <!-- Bottom iOS Actions -->
+        <div class="absolute bottom-12 left-12">
+            <div class="ios-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
             </div>
-
-            <!-- Home Indicator (装饰性白条) -->
-            <!-- 绝对定位到底部，因为父容器已经有了 safe-area padding，所以这里 bottom-0 是安全的 -->
-            <div class="absolute left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40 bottom-2 md:bottom-6"></div>
-
-            <!-- 右下角图标 -->
-            <div class="ios-icon pointer-events-auto">
+        </div>
+        <div class="absolute bottom-12 right-12">
+            <div class="ios-icon">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
             </div>
         </div>
+        
+        <!-- Swipe Indicator -->
+        <div class="absolute bottom-2 left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40"></div>
     </div>
 
-    <!-- 4. 密码输入层 (使用 padding-top 处理顶部安全区域) -->
-    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center text-white" style="padding-top: max(80px, env(safe-area-inset-top)); padding-bottom: env(safe-area-inset-bottom);">
+    <!-- Passcode Screen (Z-Index 30, Initially Hidden) -->
+    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center pt-[15vh] text-white">
         <div class="text-sm md:text-base mb-8 tracking-wide">Enter Passcode</div>
         
-        <div class="flex gap-6 mb-12 md:mb-20">
+        <!-- Dots -->
+        <div class="flex gap-6 mb-20">
             <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
             <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
             <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
             <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
         </div>
 
+        <!-- Keypad -->
         <div class="grid grid-cols-3 gap-x-8 gap-y-6 w-full max-w-[300px]">
-            <button class="keypad-btn" data-key="1"><span class="text-3xl">1</span></button>
-            <button class="keypad-btn" data-key="2"><span class="text-3xl">2</span></button>
-            <button class="keypad-btn" data-key="3"><span class="text-3xl">3</span></button>
-            <button class="keypad-btn" data-key="4"><span class="text-3xl">4</span></button>
-            <button class="keypad-btn" data-key="5"><span class="text-3xl">5</span></button>
-            <button class="keypad-btn" data-key="6"><span class="text-3xl">6</span></button>
-            <button class="keypad-btn" data-key="7"><span class="text-3xl">7</span></button>
-            <button class="keypad-btn" data-key="8"><span class="text-3xl">8</span></button>
-            <button class="keypad-btn" data-key="9"><span class="text-3xl">9</span></button>
-            <div class="flex justify-center items-center"></div>
-            <button class="keypad-btn" data-key="0"><span class="text-3xl">0</span></button>
-            <div class="flex justify-center items-center"></div>
+            <!-- Keys 1-9 -->
+            <button class="keypad-btn" data-key="1">
+                <span class="text-3xl">1</span>
+            </button>
+            <button class="keypad-btn" data-key="2">
+                <span class="text-3xl">2</span>
+            </button>
+            <button class="keypad-btn" data-key="3">
+                <span class="text-3xl">3</span>
+            </button>
+            <button class="keypad-btn" data-key="4">
+                <span class="text-3xl">4</span>
+            </button>
+            <button class="keypad-btn" data-key="5">
+                <span class="text-3xl">5</span>
+            </button>
+            <button class="keypad-btn" data-key="6">
+                <span class="text-3xl">6</span>
+            </button>
+            <button class="keypad-btn" data-key="7">
+                <span class="text-3xl">7</span>
+            </button>
+            <button class="keypad-btn" data-key="8">
+                <span class="text-3xl">8</span>
+            </button>
+            <button class="keypad-btn" data-key="9">
+                <span class="text-3xl">9</span>
+            </button>
+            
+            <!-- Bottom Row -->
+            <div class="flex justify-center items-center"></div> <!-- Empty -->
+            <button class="keypad-btn" data-key="0">
+                <span class="text-3xl">0</span>
+            </button>
+            <div class="flex justify-center items-center"></div> <!-- Empty (Backspace handled via Cancel) -->
         </div>
 
-        <button id="cancel-passcode" class="mt-8 md:mt-12 text-base font-medium tracking-wide hover:opacity-70 transition-opacity p-4">Cancel</button>
+        <!-- Cancel Button -->
+        <button id="cancel-passcode" class="mt-12 text-base font-medium tracking-wide hover:opacity-70 transition-opacity">Cancel</button>
     </div>
 
-    <!-- 5. 结果展示层 -->
+    <!-- Result Overlay (Z-Index 50) -->
     <div id="result-overlay" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-3xl perspective-container flex flex-col items-center justify-center p-4 transition-opacity duration-500 opacity-0">
+        
+        <!-- 3D Card Container -->
         <div id="card-container" class="playing-card w-[85vw] max-w-[300px] h-[420px] md:w-[360px] md:h-[520px] relative overflow-hidden select-none">
+            
+            <!-- Card Texture -->
             <div class="absolute inset-0 card-texture z-0"></div>
+            
+            <!-- Decorative Borders -->
             <div class="card-inner-border"></div>
-            <div class="corner-decor corner-tl"></div><div class="corner-decor corner-tr"></div>
-            <div class="corner-decor corner-bl"></div><div class="corner-decor corner-br"></div>
+            <div class="corner-decor corner-tl"></div>
+            <div class="corner-decor corner-tr"></div>
+            <div class="corner-decor corner-bl"></div>
+            <div class="corner-decor corner-br"></div>
+            
+            <!-- Royal Pattern (Hidden by default, shown for JQK) -->
             <div id="royal-bg" class="royal-pattern hidden"></div>
+
+            <!-- Content Container -->
             <div class="relative z-10 w-full h-full flex flex-col justify-between p-5 md:p-7">
+                <!-- Top Left Index -->
                 <div class="flex flex-col items-center leading-none self-start">
                     <span class="rank-display rank-font text-5xl md:text-6xl tracking-tighter">A</span>
                     <span class="suit-display text-4xl md:text-5xl mt-1 font-serif">♠</span>
                 </div>
+
+                <!-- Center Content -->
                 <div class="center-suit-container">
                      <span class="center-suit-display big-suit">♠</span>
                 </div>
+
+                <!-- Bottom Right Index -->
                 <div class="flex flex-col items-center leading-none self-end transform rotate-180">
                     <span class="rank-display rank-font text-5xl md:text-6xl tracking-tighter">A</span>
                     <span class="suit-display text-4xl md:text-5xl mt-1 font-serif">♠</span>
                 </div>
             </div>
+            
+            <!-- Dynamic Sheen/Reflection -->
             <div class="absolute inset-0 bg-gradient-to-tr from-white/30 via-transparent to-black/5 opacity-40 pointer-events-none mix-blend-overlay"></div>
             <div class="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-20 pointer-events-none"></div>
         </div>
-        <button id="close-result" class="glass-btn mt-8 md:mt-16">Close Reveal</button>
+
+        <button id="close-result" class="glass-btn mt-8 md:mt-16">
+            Close Reveal
+        </button>
     </div>
 
     <script>
+        // Configuration
         const MIN_SEC = 11;
         const MAX_SEC = 23;
+        
+        // State
         let customSeconds = MIN_SEC;
         let lastRealSecond = -1;
 
+        // DOM Elements
         const clockTimeEl = document.getElementById('clock-time');
         const clockSecondsEl = document.getElementById('clock-seconds');
         const dateDisplayEl = document.getElementById('date-display');
         const resultOverlay = document.getElementById('result-overlay');
         const closeResultBtn = document.getElementById('close-result');
         const cardContainer = document.getElementById('card-container');
+        
+        // Elements inside the card
         const rankDisplays = document.querySelectorAll('.rank-display');
         const suitDisplays = document.querySelectorAll('.suit-display');
         const centerSuitDisplay = document.querySelector('.center-suit-display');
         const royalBg = document.getElementById('royal-bg');
         
-        const suitColors = { 'spades': 'suit-colors-black', 'hearts': 'suit-colors-red', 'clubs': 'suit-colors-black', 'diamonds': 'suit-colors-red' };
-        const suitChars = { 'spades': '♠', 'hearts': '♥', 'clubs': '♣', 'diamonds': '♦' };
+        // Mapping for display
+        const suitColors = {
+            'spades': 'suit-colors-black',
+            'hearts': 'suit-colors-red',
+            'clubs': 'suit-colors-black',
+            'diamonds': 'suit-colors-red'
+        };
+        
+        const suitChars = {
+            'spades': '♠',
+            'hearts': '♥',
+            'clubs': '♣',
+            'diamonds': '♦'
+        };
 
+        // 11=A, 12=2 ... 23=K
         function getRankDisplay(val) {
-            const map = { 11: 'A', 12: '2', 13: '3', 14: '4', 15: '5', 16: '6', 17: '7', 18: '8', 19: '9', 20: '10', 21: 'J', 22: 'Q', 23: 'K' };
+            const map = {
+                11: 'A',
+                12: '2',
+                13: '3',
+                14: '4',
+                15: '5',
+                16: '6',
+                17: '7',
+                18: '8',
+                19: '9',
+                20: '10',
+                21: 'J',
+                22: 'Q',
+                23: 'K'
+            };
             return map[val] || val;
         }
 
+        // Clock Logic
         function updateClock() {
             const now = new Date();
             const realSeconds = now.getSeconds();
+            const realMinutes = now.getMinutes();
+            const realHours = now.getHours();
+
+            // Update Digital "Magic" Clock (Secret Time)
+            // Update custom seconds counter roughly every real second
             if (realSeconds !== lastRealSecond) {
                 lastRealSecond = realSeconds;
                 customSeconds++;
-                if (customSeconds > MAX_SEC) customSeconds = MIN_SEC;
+                if (customSeconds > MAX_SEC) {
+                    customSeconds = MIN_SEC;
+                }
             }
-            clockTimeEl.innerText = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-            clockSecondsEl.innerText = `${String(customSeconds).padStart(2, '0')}`;
-            dateDisplayEl.innerText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+            const displayHours = String(realHours).padStart(2, '0');
+            const displayMinutes = String(realMinutes).padStart(2, '0');
+            const displayMagicSeconds = String(customSeconds).padStart(2, '0');
+
+            clockTimeEl.innerText = `${displayHours}:${displayMinutes}`;
+            clockSecondsEl.innerText = `${displayMagicSeconds}`;
+            
+            // Update Date
+            const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' };
+            dateDisplayEl.innerText = now.toLocaleDateString('en-US', dateOptions);
+
             requestAnimationFrame(updateClock);
         }
+
+        // Start Clock
         requestAnimationFrame(updateClock);
 
+        // Click Handling
         const quadrants = document.querySelectorAll('.quadrant');
         quadrants.forEach(q => {
-            q.addEventListener('click', () => showResult(q.getAttribute('data-suit'), customSeconds));
+            q.addEventListener('click', (e) => {
+                const suit = q.getAttribute('data-suit');
+                const currentMagicNumber = customSeconds;
+                showResult(suit, currentMagicNumber);
+            });
         });
 
         function showResult(suit, magicNumber) {
             const rank = getRankDisplay(magicNumber);
-            const isRoyal = ['J', 'Q', 'K'].includes(rank);
+            const suitChar = suitChars[suit];
             const colorClass = suitColors[suit];
-            suitDisplays.forEach(el => { el.style.writingMode = 'horizontal-tb'; el.style.textOrientation = 'mixed'; });
+            
+            // Reset styles that might have been changed by Joker
+            suitDisplays.forEach(el => {
+                el.style.writingMode = 'horizontal-tb';
+                el.style.textOrientation = 'mixed';
+            });
             centerSuitDisplay.style.fontSize = '';
-            royalBg.classList.toggle('hidden', !isRoyal);
-            if(isRoyal) royalBg.style.color = (suit === 'hearts' || suit === 'diamonds') ? '#b91c1c' : '#1a1a1a';
-            rankDisplays.forEach(el => { el.innerText = rank; el.className = `rank-display rank-font text-5xl md:text-6xl tracking-tighter ${colorClass}`; });
-            suitDisplays.forEach(el => { el.innerText = suitChars[suit]; el.className = `suit-display text-4xl md:text-5xl mt-1 ${colorClass}`; });
-            centerSuitDisplay.innerText = suitChars[suit]; centerSuitDisplay.className = `center-suit-display big-suit ${colorClass}`;
-            createParticles(window.innerWidth / 2, window.innerHeight / 2, (suit === 'hearts' || suit === 'diamonds') ? '#c0392b' : '#2c3e50', '#c5a059');
-            resultOverlay.classList.remove('hidden'); resultOverlay.classList.add('flex');
+
+            // Check if royal
+            const isRoyal = ['J', 'Q', 'K'].includes(rank);
+            
+            // Update Royal Background Pattern
+            if (isRoyal) {
+                royalBg.classList.remove('hidden');
+                royalBg.style.color = (suit === 'hearts' || suit === 'diamonds') ? '#b91c1c' : '#1a1a1a';
+            } else {
+                royalBg.classList.add('hidden');
+            }
+
+            // Update Corner Ranks
+            rankDisplays.forEach(el => {
+                el.innerText = rank;
+                el.className = `rank-display rank-font text-5xl md:text-6xl tracking-tighter ${colorClass}`; 
+            });
+            
+            // Update Corner Suits
+            suitDisplays.forEach(el => {
+                el.innerText = suitChar;
+                el.className = `suit-display text-4xl md:text-5xl mt-1 ${colorClass}`;
+            });
+
+            // Update Center Suit
+            centerSuitDisplay.innerText = suitChar;
+            centerSuitDisplay.className = `center-suit-display big-suit ${colorClass}`;
+
+            // Particle Color
+            const particleColor = (suit === 'hearts' || suit === 'diamonds') ? '#c0392b' : '#2c3e50';
+            const accentColor = '#c5a059'; // Gold
+
+            // Trigger Particles
+            createParticles(window.innerWidth / 2, window.innerHeight / 2, particleColor, accentColor);
+
+            // Show Overlay
+            resultOverlay.classList.remove('hidden');
+            resultOverlay.classList.add('flex');
+            
+            // Animation: Fade In Overlay
             requestAnimationFrame(() => {
                 resultOverlay.classList.remove('opacity-0');
-                setTimeout(() => cardContainer.classList.add('revealed'), 100);
+                
+                // Animation: Flip Card In
+                setTimeout(() => {
+                    cardContainer.classList.add('revealed');
+                }, 100);
             });
-            if (navigator.vibrate) navigator.vibrate([20, 30, 20]);
+
+            // Haptic feedback
+            if (navigator.vibrate) {
+                navigator.vibrate([20, 30, 20]);
+            }
         }
 
         function closeResult() {
+            // Animate Out
             cardContainer.classList.remove('revealed');
             resultOverlay.classList.add('opacity-0');
-            if (isPasscodeActive) hidePasscodeScreen();
-            setTimeout(() => { resultOverlay.classList.add('hidden'); resultOverlay.classList.remove('flex'); }, 600);
+            
+            // If Passcode screen was active (we are closing Joker), reset UI
+            if (isPasscodeActive) {
+                 hidePasscodeScreen();
+            }
+
+            setTimeout(() => {
+                resultOverlay.classList.add('hidden');
+                resultOverlay.classList.remove('flex');
+            }, 600); // Match CSS transition time
         }
 
-        function createParticles(x, y, pColor, sColor) {
-            for (let i = 0; i < 40; i++) {
-                const p = document.createElement('div');
-                p.classList.add('particle');
+        function createParticles(x, y, primaryColor, secondaryColor) {
+            const particleCount = 40;
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.classList.add('particle');
+                
+                // Randomize direction and distance
                 const angle = Math.random() * Math.PI * 2;
-                const v = 100 + Math.random() * 250;
-                p.style.setProperty('--x', `${Math.cos(angle) * v}px`);
-                p.style.setProperty('--y', `${Math.sin(angle) * v}px`);
-                p.style.setProperty('--r', `${Math.random() * 360}deg`);
-                p.style.left = `${x}px`; p.style.top = `${y}px`;
-                p.style.backgroundColor = Math.random() > 0.7 ? sColor : pColor;
+                const velocity = 100 + Math.random() * 250;
+                const tx = Math.cos(angle) * velocity;
+                const ty = Math.sin(angle) * velocity;
+                const rotate = Math.random() * 360;
+                
+                particle.style.setProperty('--x', `${tx}px`);
+                particle.style.setProperty('--y', `${ty}px`);
+                particle.style.setProperty('--r', `${rotate}deg`);
+                
+                particle.style.left = `${x}px`;
+                particle.style.top = `${y}px`;
+                
+                // Mix colors (primary + gold/secondary)
+                particle.style.backgroundColor = Math.random() > 0.7 ? secondaryColor : primaryColor;
+                
+                // Random shape/size
                 const size = 4 + Math.random() * 8;
-                p.style.width = `${size}px`; p.style.height = `${size}px`;
-                if (Math.random() > 0.5) p.style.borderRadius = '50%'; else p.style.transform = 'rotate(45deg)';
-                document.body.appendChild(p);
-                setTimeout(() => p.remove(), 1200);
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                
+                // Diamond shape or circle
+                if (Math.random() > 0.5) {
+                    particle.style.borderRadius = '50%';
+                } else {
+                    particle.style.transform = 'rotate(45deg)';
+                }
+                
+                document.body.appendChild(particle);
+                
+                // Cleanup
+                setTimeout(() => particle.remove(), 1200);
             }
         }
 
         closeResultBtn.addEventListener('click', closeResult);
-        resultOverlay.addEventListener('click', (e) => { if (e.target === resultOverlay) closeResult(); });
-        document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
+        
+        // Also close on background click
+        resultOverlay.addEventListener('click', (e) => {
+            if (e.target === resultOverlay) {
+                closeResult();
+            }
+        });
 
+        // Prevent double tap zoom
+        document.addEventListener('dblclick', function(event) {
+            event.preventDefault();
+        }, { passive: false });
+
+        /* --- Swipe & Passcode Logic --- */
         const lockScreenUi = document.getElementById('lock-screen-ui');
         const passcodeScreen = document.getElementById('passcode-screen');
         const cancelPasscodeBtn = document.getElementById('cancel-passcode');
         const dots = document.querySelectorAll('.dot');
         const keypadBtns = document.querySelectorAll('.keypad-btn');
-        let startY = 0, isPasscodeActive = false, passcode = "";
+        
+        let startY = 0;
+        let isPasscodeActive = false;
+        let passcode = "";
 
-        document.addEventListener('touchstart', (e) => { if (!isPasscodeActive) startY = e.touches[0].clientY; }, { passive: false });
+        // Touch Start
+        document.addEventListener('touchstart', (e) => {
+            if (isPasscodeActive) return;
+            startY = e.touches[0].clientY;
+        }, { passive: false });
+
+        // Touch End (Swipe Detection)
         document.addEventListener('touchend', (e) => {
-            if (!isPasscodeActive && startY - e.changedTouches[0].clientY > 50) showPasscodeScreen();
+            if (isPasscodeActive) return;
+            
+            const endY = e.changedTouches[0].clientY;
+            const diffY = startY - endY;
+            
+            // Swipe Up Threshold (> 50px)
+            if (diffY > 50) {
+                showPasscodeScreen();
+            }
         }, { passive: false });
 
         function showPasscodeScreen() {
             isPasscodeActive = true;
-            lockScreenUi.style.transform = 'translateY(-100vh)'; lockScreenUi.style.opacity = '0';
-            passcodeScreen.classList.remove('translate-y-full'); passcodeScreen.classList.add('translate-y-0');
+            
+            // Animate Lock Screen Up/Out
+            lockScreenUi.style.transform = 'translateY(-100vh)';
+            lockScreenUi.style.opacity = '0';
+            
+            // Animate Passcode Screen Up/In
+            passcodeScreen.classList.remove('translate-y-full');
+            passcodeScreen.classList.add('translate-y-0');
+            
+            // Disable Magic Clicks
             quadrants.forEach(q => q.style.pointerEvents = 'none');
         }
 
         function hidePasscodeScreen() {
-            isPasscodeActive = false; passcode = ""; updateDots();
-            lockScreenUi.style.transform = 'translateY(0)'; lockScreenUi.style.opacity = '1';
-            passcodeScreen.classList.remove('translate-y-0'); passcodeScreen.classList.add('translate-y-full');
-            setTimeout(() => quadrants.forEach(q => q.style.pointerEvents = 'auto'), 500);
+            isPasscodeActive = false;
+            passcode = "";
+            updateDots();
+            
+            // Animate Lock Screen Down/In
+            lockScreenUi.style.transform = 'translateY(0)';
+            lockScreenUi.style.opacity = '1';
+            
+            // Animate Passcode Screen Down/Out
+            passcodeScreen.classList.remove('translate-y-0');
+            passcodeScreen.classList.add('translate-y-full');
+            
+            // Re-enable Magic Clicks
+            setTimeout(() => {
+                 quadrants.forEach(q => q.style.pointerEvents = 'auto');
+            }, 500);
         }
 
+        // Cancel Button
         cancelPasscodeBtn.addEventListener('click', hidePasscodeScreen);
+
+        // Keypad Interaction
         keypadBtns.forEach(btn => {
             btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-key');
                 if (passcode.length < 4) {
-                    passcode += btn.getAttribute('data-key');
+                    passcode += key;
                     updateDots();
+                    
+                    // Haptic
                     if (navigator.vibrate) navigator.vibrate(10);
-                    if (passcode.length === 4) setTimeout(revealJoker, 300);
+
+                    if (passcode.length === 4) {
+                        setTimeout(() => {
+                            revealJoker();
+                        }, 300);
+                    }
                 }
             });
         });
 
-        function updateDots() {
-            dots.forEach((d, i) => d.classList.toggle('filled', i < passcode.length));
+        function revealJoker() {
+            // Update Card Content for Joker
+            
+            // Update Royal Pattern (Grey/Red)
+            royalBg.classList.remove('hidden');
+            royalBg.style.color = '#333'; 
+
+            // Update Corner Ranks (Star icon)
+            rankDisplays.forEach(el => {
+                el.innerHTML = '★'; 
+                el.className = `rank-display rank-font text-4xl md:text-5xl tracking-tighter text-red-700`; 
+            });
+            
+            // Update Corner Suits (Use JOKER text vertically)
+            suitDisplays.forEach(el => {
+                el.innerText = 'JOKER';
+                el.style.writingMode = 'vertical-rl';
+                el.style.textOrientation = 'upright';
+                el.className = `suit-display text-[0.6rem] md:text-xs mt-1 font-bold tracking-widest text-black`;
+            });
+
+            // Update Center Suit (Classic Jester Icon)
+            const jokerSVG = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" class="w-48 h-48 md:w-64 md:h-64 drop-shadow-xl">
+                 <defs>
+                    <linearGradient id="hatGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#b91c1c;stop-opacity:1" />
+                        <stop offset="50%" style="stop-color:#000000;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#b91c1c;stop-opacity:1" />
+                    </linearGradient>
+                </defs>
+                
+                <!-- Collar -->
+                <path d="M70 160 Q 100 180, 130 160 L 120 140 L 100 150 L 80 140 Z" fill="#f1c40f" stroke="#000" stroke-width="1"/>
+
+                <!-- Face Base -->
+                <path d="M60 100 Q 60 160, 100 170 Q 140 160, 140 100" fill="#fff" stroke="#333" stroke-width="1"/>
+                <path d="M60 100 L 140 100 L 100 80 Z" fill="#fff" />
+                
+                <!-- Jester Hat -->
+                <!-- Left Peak -->
+                <path d="M60 100 C 30 60, 20 20, 40 40 Q 50 50, 80 90" fill="#000" />
+                <circle cx="35" cy="35" r="7" fill="#f1c40f" />
+                
+                <!-- Right Peak -->
+                <path d="M140 100 C 170 60, 180 20, 160 40 Q 150 50, 120 90" fill="#000" />
+                <circle cx="165" cy="35" r="7" fill="#f1c40f" />
+                
+                <!-- Center Peak -->
+                <path d="M80 90 Q 100 10, 120 90 Z" fill="#b91c1c" />
+                <circle cx="100" cy="15" r="7" fill="#f1c40f" />
+                
+                <!-- Face Details -->
+                <!-- Eyes -->
+                <path d="M75 115 L 90 120 L 90 110 Z" fill="#000" />
+                <path d="M125 115 L 110 120 L 110 110 Z" fill="#000" />
+                
+                <!-- Nose -->
+                <circle cx="100" cy="130" r="6" fill="#b91c1c" />
+                
+                <!-- Smile -->
+                <path d="M75 145 Q 100 165, 125 145" fill="none" stroke="#b91c1c" stroke-width="3" stroke-linecap="round" />
+                <path d="M73 143 L 77 147 M 123 147 L 127 143" stroke="#000" stroke-width="1" />
+                
+            </svg>
+            <div class="text-2xl md:text-4xl font-serif font-bold text-red-700 mt-4 tracking-widest">JOKER</div>
+            `;
+            
+            centerSuitDisplay.innerHTML = `<div class="flex flex-col items-center justify-center">${jokerSVG}</div>`;
+            centerSuitDisplay.className = `center-suit-display big-suit`;
+            centerSuitDisplay.style.fontSize = '';
+
+            // Particles - Red/Black/Gold
+            createParticles(window.innerWidth / 2, window.innerHeight / 2, '#b91c1c', '#f1c40f'); 
+
+            // Show Overlay
+            resultOverlay.classList.remove('hidden');
+            resultOverlay.classList.add('flex');
+            
+            // Animation: Fade In Overlay
+            requestAnimationFrame(() => {
+                resultOverlay.classList.remove('opacity-0');
+                
+                // Animation: Flip Card In
+                setTimeout(() => {
+                    cardContainer.classList.add('revealed');
+                }, 100);
+            });
+
+            // Reset Passcode Screen
+            passcode = "";
+            updateDots();
+            
+            // Hide Passcode Screen behind the overlay
+            
+            if (navigator.vibrate) {
+                navigator.vibrate([50, 50, 100, 50, 50, 50, 100]);
+            }
         }
 
-        function revealJoker() {
-            royalBg.classList.remove('hidden'); royalBg.style.color = '#333';
-            rankDisplays.forEach(el => { el.innerHTML = '★'; el.className = `rank-display rank-font text-4xl md:text-5xl tracking-tighter text-red-700`; });
-            suitDisplays.forEach(el => { el.innerText = 'JOKER'; el.style.writingMode = 'vertical-rl'; el.style.textOrientation = 'upright'; el.className = `suit-display text-[0.6rem] md:text-xs mt-1 font-bold tracking-widest text-black`; });
-            const jokerSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" class="w-48 h-48 md:w-64 md:h-64 drop-shadow-xl"><defs><linearGradient id="hatGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#b91c1c;stop-opacity:1"/><stop offset="50%" style="stop-color:#000000;stop-opacity:1"/><stop offset="100%" style="stop-color:#b91c1c;stop-opacity:1"/></linearGradient></defs><path d="M70 160 Q 100 180, 130 160 L 120 140 L 100 150 L 80 140 Z" fill="#f1c40f" stroke="#000" stroke-width="1"/><path d="M60 100 Q 60 160, 100 170 Q 140 160, 140 100" fill="#fff" stroke="#333" stroke-width="1"/><path d="M60 100 L 140 100 L 100 80 Z" fill="#fff"/><path d="M60 100 C 30 60, 20 20, 40 40 Q 50 50, 80 90" fill="#000"/><circle cx="35" cy="35" r="7" fill="#f1c40f"/><path d="M140 100 C 170 60, 180 20, 160 40 Q 150 50, 120 90" fill="#000"/><circle cx="165" cy="35" r="7" fill="#f1c40f"/><path d="M80 90 Q 100 10, 120 90 Z" fill="#b91c1c"/><circle cx="100" cy="15" r="7" fill="#f1c40f"/><path d="M75 115 L 90 120 L 90 110 Z" fill="#000"/><path d="M125 115 L 110 120 L 110 110 Z" fill="#000"/><circle cx="100" cy="130" r="6" fill="#b91c1c"/><path d="M75 145 Q 100 165, 125 145" fill="none" stroke="#b91c1c" stroke-width="3" stroke-linecap="round"/><path d="M73 143 L 77 147 M 123 147 L 127 143" stroke="#000" stroke-width="1"/></svg><div class="text-2xl md:text-4xl font-serif font-bold text-red-700 mt-4 tracking-widest">JOKER</div>`;
-            centerSuitDisplay.innerHTML = `<div class="flex flex-col items-center justify-center">${jokerSVG}</div>`;
-            centerSuitDisplay.className = `center-suit-display big-suit`; centerSuitDisplay.style.fontSize = '';
-            createParticles(window.innerWidth/2, window.innerHeight/2, '#b91c1c', '#f1c40f');
-            resultOverlay.classList.remove('hidden'); resultOverlay.classList.add('flex');
-            requestAnimationFrame(() => { resultOverlay.classList.remove('opacity-0'); setTimeout(() => cardContainer.classList.add('revealed'), 100); });
-            passcode = ""; updateDots();
-            if (navigator.vibrate) navigator.vibrate([50, 50, 100, 50, 50, 50, 100]);
+        function updateDots() {
+            dots.forEach((dot, index) => {
+                if (index < passcode.length) {
+                    dot.classList.add('filled');
+                } else {
+                    dot.classList.remove('filled');
+                }
+            });
         }
-        
+
+        // Add shake animation style dynamically
+        const styleSheet = document.createElement("style");
+        styleSheet.innerText = `
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+                20%, 40%, 60%, 80% { transform: translateX(10px); }
+            }
+            .animate-shake {
+                animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+            }
+        `;
+        document.head.appendChild(styleSheet);
+
+        /* --- Wake Lock (Prevent Auto Lock) --- */
         let wakeLock = null;
-        const requestWakeLock = async () => { if ('wakeLock' in navigator) try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {} };
-        const handleFirst = () => { requestWakeLock(); document.removeEventListener('touchstart', handleFirst); document.removeEventListener('click', handleFirst); };
-        document.addEventListener('touchstart', handleFirst); document.addEventListener('click', handleFirst);
-        document.addEventListener('visibilitychange', async () => { if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock(); });
+
+        // Function to request wake lock
+        const requestWakeLock = async () => {
+            if ('wakeLock' in navigator) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Wake Lock active');
+                } catch (err) {
+                    console.log('Wake Lock error:', err);
+                }
+            }
+        };
+
+        // Request Wake Lock on first interaction (iOS requires this)
+        const handleFirstInteraction = () => {
+            requestWakeLock();
+            document.removeEventListener('touchstart', handleFirstInteraction);
+            document.removeEventListener('click', handleFirstInteraction);
+        };
+
+        document.addEventListener('touchstart', handleFirstInteraction);
+        document.addEventListener('click', handleFirstInteraction);
+
+        // Re-request on visibility change (if user minimizes and returns)
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                requestWakeLock();
+            }
+        });
+
     </script>
 </body>
 </html>
