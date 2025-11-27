@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     
-    <!-- PWA 关键设置 -->
+    <!-- 关键：viewport 设置 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <!-- iOS PWA 模式设置 -->
+    <!-- PWA 设置 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
@@ -15,53 +15,67 @@
     <meta name="apple-mobile-web-app-title" content="Magic Clock">
     <meta name="format-detection" content="telephone=no">
     
-    <!-- 引用 Manifest -->
     <link rel="manifest" href="manifest.json">
-    
-    <!-- App 图标 -->
     <link rel="apple-touch-icon" href="icon.png">
     
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@100;400;700&family=Share+Tech+Mono&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+    
+    <!-- 立即执行的脚本：在页面渲染前锁定高度，防止闪烁 -->
+    <script>
+        const setAppHeight = () => {
+            const doc = document.documentElement;
+            // 获取真实的窗口内部高度（单位像素），这能排除浏览器控件的干扰
+            doc.style.setProperty('--app-height', `${window.innerHeight}px`);
+        }
+        window.addEventListener('resize', setAppHeight);
+        setAppHeight(); // 初始化执行
+    </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Italiana&display=swap');
 
         :root {
             background-color: #000000;
+            /* 默认高度，随后会被 JS 覆盖 */
+            --app-height: 100vh;
         }
 
         html {
             background-color: #000000;
-            /* 强制全屏，忽略浏览器地址栏计算 */
-            height: 100dvh; 
             width: 100vw;
+            /* 强制截断，禁止滚动 */
             overflow: hidden;
             position: fixed;
             top: 0;
             left: 0;
+            margin: 0;
+            padding: 0;
         }
         
         body {
             background-color: #000000;
-            height: 100%;
             width: 100%;
+            /* 核心修改：使用 JS 计算出的真实物理高度 */
+            height: var(--app-height);
             margin: 0;
             padding: 0; 
             color: #fff;
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
-            touch-action: none; /* 禁止 iOS 回弹效果 */
+            touch-action: none;
             font-family: 'Inter', sans-serif;
-            position: fixed; /* 锁死 body 位置 */
-            inset: 0;
+            position: fixed;
+            top: 0;
+            left: 0;
         }
         
-        /* 背景必须铺满，不顾及安全区域 */
+        /* 背景全覆盖 */
         .bg-gradient-radial {
             background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
             position: absolute;
-            inset: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             z-index: 0;
         }
 
@@ -206,21 +220,20 @@
         .dot { transition: background-color 0.2s; }
         .dot.filled { background-color: white; }
 
-        /* 特别针对 iOS PWA 的底部修正 */
+        /* 底部安全区修正 */
         .bottom-safe-area {
-            /* 强制将内容推到底部，padding 为安全区域高度 */
+            /* 只使用安全区域作为 padding，不添加额外 margin */
             padding-bottom: env(safe-area-inset-bottom);
         }
         
         .top-safe-area {
-             /* 顶部安全区域 + 额外的一点偏移，适配灵动岛 */
              padding-top: calc(env(safe-area-inset-top) + 10px);
         }
     </style>
 </head>
 <body class="bg-gradient-radial">
 
-    <!-- Main Interactive Grid (Z-Index 10) -->
+    <!-- Main Interactive Grid -->
     <div class="absolute inset-0 grid grid-cols-2 grid-rows-2 z-10">
         <div id="area-spades" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="spades"></div>
         <div id="area-hearts" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="hearts"></div>
@@ -228,10 +241,10 @@
         <div id="area-diamonds" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="diamonds"></div>
     </div>
 
-    <!-- UI Layer: 绝对分离顶部和底部，不再使用 Flex justify-between 以避免位移 -->
+    <!-- UI Layer -->
     <div id="lock-screen-ui" class="absolute inset-0 z-20 pointer-events-none">
         
-        <!-- Top Section: 绝对定位于顶部 -->
+        <!-- Top Section -->
         <div class="absolute top-0 left-0 right-0 flex flex-col items-center top-safe-area transition-all duration-500">
             <div id="date-display" class="ios-lock-date text-lg md:text-xl mb-2">Monday, June 3</div>
             <div class="flex items-baseline gap-2">
@@ -240,10 +253,10 @@
             </div>
         </div>
 
-        <!-- Bottom Section: 绝对定位于底部 -->
+        <!-- Bottom Section: 强制定位于真实的页面底部 (bottom: 0) -->
         <div class="absolute bottom-0 left-0 right-0 px-12 transition-all duration-500 bottom-safe-area">
-            <!-- 图标容器：位于安全区域上方一点点 -->
-            <div class="flex justify-between items-end w-full mb-1">
+            <!-- 图标容器：增加 mb-2 微调，使图标略微高于 Home Indicator -->
+            <div class="flex justify-between items-end w-full mb-3">
                 <div class="ios-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 </div>
@@ -254,11 +267,11 @@
             </div>
         </div>
 
-        <!-- Home Indicator: 独立于所有布局，强制在最底部 -->
+        <!-- Home Indicator: 强制在最底部 -->
         <div class="absolute bottom-[6px] left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40 z-30"></div>
     </div>
 
-    <!-- Passcode Screen (Z-Index 40) -->
+    <!-- Passcode Screen -->
     <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center top-safe-area pt-12 text-white">
         <div class="text-sm md:text-base mb-8 tracking-wide">Enter Passcode</div>
         <div class="flex gap-6 mb-20">
@@ -284,7 +297,7 @@
         <button id="cancel-passcode" class="mt-12 text-base font-medium tracking-wide hover:opacity-70 transition-opacity pb-8">Cancel</button>
     </div>
 
-    <!-- Result Overlay (Z-Index 50) -->
+    <!-- Result Overlay -->
     <div id="result-overlay" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-3xl perspective-container flex flex-col items-center justify-center p-4 transition-opacity duration-500 opacity-0">
         <div id="card-container" class="playing-card w-[85vw] max-w-[300px] h-[420px] md:w-[360px] md:h-[520px] relative overflow-hidden select-none">
             <div class="absolute inset-0 card-texture z-0"></div>
@@ -425,7 +438,6 @@
         function showPasscodeScreen() {
             isPasscodeActive = true;
             lockScreenUi.style.opacity = '0';
-            // 使用 translate 移除界面，避免 absolute 定位干扰
             lockScreenUi.style.transform = 'translateY(-100vh)';
             passcodeScreen.classList.remove('translate-y-full'); passcodeScreen.classList.add('translate-y-0');
             document.querySelectorAll('.quadrant').forEach(q => q.style.pointerEvents = 'none');
@@ -480,6 +492,9 @@
         const handleFirst = () => { requestWakeLock(); document.removeEventListener('touchstart', handleFirst); document.removeEventListener('click', handleFirst); };
         document.addEventListener('touchstart', handleFirst); document.addEventListener('click', handleFirst);
         document.addEventListener('visibilitychange', async () => { if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock(); });
+        
+        // 再次触发高度修正，防止部分 iOS 在页面加载完成后高度变化
+        window.addEventListener('load', setAppHeight);
     </script>
 </body>
 </html>
