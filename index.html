@@ -3,17 +3,15 @@
 <head>
     <meta charset="UTF-8">
     
-    <!-- 关键：viewport 设置 -->
+    <!-- 1. 强制覆盖视口设置 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
     <!-- PWA 设置 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <!-- 改为 default 试试，有时 black-translucent 会导致布局计算怪异，但配合下面的 CSS 应该没问题 -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
     <title>Magic Clock</title>
-    
-    <meta name="apple-mobile-web-app-title" content="Magic Clock">
-    <meta name="format-detection" content="telephone=no">
     
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon.png">
@@ -21,65 +19,56 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@100;400;700&family=Share+Tech+Mono&family=Cinzel:wght@700&display=swap" rel="stylesheet">
     
-    <!-- 立即执行的脚本：在页面渲染前锁定高度，防止闪烁 -->
-    <script>
-        const setAppHeight = () => {
-            const doc = document.documentElement;
-            // 获取真实的窗口内部高度（单位像素），这能排除浏览器控件的干扰
-            doc.style.setProperty('--app-height', `${window.innerHeight}px`);
-        }
-        window.addEventListener('resize', setAppHeight);
-        setAppHeight(); // 初始化执行
-    </script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Italiana&display=swap');
 
         :root {
             background-color: #000000;
-            /* 默认高度，随后会被 JS 覆盖 */
-            --app-height: 100vh;
         }
 
+        /* 2. 根元素重置 */
         html {
             background-color: #000000;
-            width: 100vw;
-            /* 强制截断，禁止滚动 */
-            overflow: hidden;
-            position: fixed;
-            top: 0;
-            left: 0;
             margin: 0;
             padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* 禁止滚动 */
+            -webkit-text-size-adjust: 100%;
         }
         
         body {
             background-color: #000000;
-            width: 100%;
-            /* 核心修改：使用 JS 计算出的真实物理高度 */
-            height: var(--app-height);
             margin: 0;
-            padding: 0; 
-            color: #fff;
+            padding: 0;
+            width: 100%;
+            height: 100%;
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
             touch-action: none;
             font-family: 'Inter', sans-serif;
+            /* 关键：防止 iOS 橡皮筋回弹效果暴露底色 */
+            position: fixed;
+            inset: 0;
+        }
+        
+        /* 3. 背景层：强制拉伸到物理边缘 (关键修复) */
+        #app-background {
             position: fixed;
             top: 0;
             left: 0;
-        }
-        
-        /* 背景全覆盖 */
-        .bg-gradient-radial {
-            background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
+            right: 0;
+            bottom: 0;
             z-index: 0;
+            background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
+            /* 确保背景延伸到所有区域，不留任何死角 */
+            height: 100vh; 
+            width: 100vw;
         }
 
-        .bg-gradient-radial::before {
+        /* 噪点纹理 */
+        #app-background::before {
             content: "";
             position: absolute;
             inset: 0;
@@ -89,6 +78,31 @@
             animation: grain 8s steps(10) infinite;
         }
 
+        /* 4. 交互层：同样强制拉伸 */
+        #interactive-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10;
+        }
+
+        /* 5. UI 层：负责避让安全区域 */
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 20;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        /* 动画定义 */
         @keyframes grain {
             0%, 100% { transform:translate(0, 0); }
             10% { transform:translate(-5%, -10%); }
@@ -106,8 +120,12 @@
             transition: background-color 0.2s ease;
             position: relative;
             overflow: hidden;
+            /* 确保点击区域铺满 */
+            height: 100%; 
+            width: 100%;
         }
 
+        /* 字体与其他样式 */
         .ios-lock-time {
             font-family: 'Inter', sans-serif;
             font-weight: 700;
@@ -140,6 +158,7 @@
             transition: background 0.2s;
         }
 
+        /* 卡片样式 */
         .perspective-container { perspective: 1200px; }
         .playing-card {
             background: #fdfbf7;
@@ -153,7 +172,6 @@
             border: 1px solid #dcdcdc;
         }
         .playing-card.revealed { transform: rotateY(0deg) rotateZ(1deg) translateY(-20px); }
-        
         .card-texture {
             background-color: transparent;
             background-image: linear-gradient(45deg, rgba(0,0,0,0.02) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.02) 75%, rgba(0,0,0,0.02)), linear-gradient(45deg, rgba(0,0,0,0.02) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.02) 75%, rgba(0,0,0,0.02));
@@ -161,91 +179,60 @@
             background-position: 0 0, 2px 2px;
             opacity: 0.6;
         }
-
-        .card-inner-border {
-            position: absolute; inset: 12px; border: 2px solid #c5a059; border-radius: 10px; pointer-events: none; z-index: 5;
-            box-shadow: inset 0 0 10px rgba(197, 160, 89, 0.2);
-        }
-
+        .card-inner-border { position: absolute; inset: 12px; border: 2px solid #c5a059; border-radius: 10px; pointer-events: none; z-index: 5; box-shadow: inset 0 0 10px rgba(197, 160, 89, 0.2); }
         .corner-decor { position: absolute; width: 10px; height: 10px; border: 2px solid #c5a059; z-index: 6; }
         .corner-tl { top: 12px; left: 12px; border-right: none; border-bottom: none; border-radius: 10px 0 0 0; }
         .corner-tr { top: 12px; right: 12px; border-left: none; border-bottom: none; border-radius: 0 10px 0 0; }
         .corner-bl { bottom: 12px; left: 12px; border-right: none; border-top: none; border-radius: 0 0 0 10px; }
         .corner-br { bottom: 12px; right: 12px; border-left: none; border-top: none; border-radius: 0 0 10px 0; }
-
         .rank-font { font-family: 'Cinzel', serif; font-weight: 900; }
         .suit-colors-black { color: #1a1a1a; }
         .suit-colors-red { color: #b91c1c; }
-
         .center-suit-container { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 10; }
         .big-suit { font-size: 8rem; line-height: 1; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); }
         @media (min-width: 768px) { .big-suit { font-size: 12rem; } }
-
-        .royal-pattern {
-            position: absolute; inset: 30px; opacity: 0.08;
-            background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
-            background-size: 10px 10px; z-index: 1;
-        }
-
-        .particle {
-            position: absolute; pointer-events: none;
-            animation: pop-particle 1.2s cubic-bezier(0, 0.9, 0.57, 1) forwards;
-            opacity: 0; z-index: 60;
-        }
-
-        @keyframes pop-particle {
-            0% { transform: translate(0, 0) rotate(0deg) scale(0.5); opacity: 1; }
-            50% { opacity: 1; }
-            100% { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(0); opacity: 0; }
-        }
-
-        .glass-btn {
-            background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7);
-            letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.8rem;
-            padding: 1rem 2.5rem; border-radius: 9999px; transition: all 0.3s ease;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
+        .royal-pattern { position: absolute; inset: 30px; opacity: 0.08; background-image: radial-gradient(circle, currentColor 1px, transparent 1px); background-size: 10px 10px; z-index: 1; }
+        .particle { position: absolute; pointer-events: none; animation: pop-particle 1.2s cubic-bezier(0, 0.9, 0.57, 1) forwards; opacity: 0; z-index: 60; }
+        @keyframes pop-particle { 0% { transform: translate(0, 0) rotate(0deg) scale(0.5); opacity: 1; } 50% { opacity: 1; } 100% { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(0); opacity: 0; } }
+        
+        /* 按钮与键盘 */
+        .glass-btn { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.8rem; padding: 1rem 2.5rem; border-radius: 9999px; transition: all 0.3s ease; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         .glass-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; transform: translateY(-2px); box-shadow: 0 0 30px rgba(255, 255, 255, 0.1); }
-
-        .keypad-btn {
-            width: 75px; height: 75px; border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: background 0.2s; border: none; outline: none; cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-        }
+        .keypad-btn { width: 75px; height: 75px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background 0.2s; border: none; outline: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
         .keypad-btn:active { background: rgba(255, 255, 255, 0.4); }
+        .dot { transition: background-color 0.2s; } .dot.filled { background-color: white; }
 
-        .dot { transition: background-color 0.2s; }
-        .dot.filled { background-color: white; }
-
-        /* 底部安全区修正 */
-        .bottom-safe-area {
-            /* 只使用安全区域作为 padding，不添加额外 margin */
-            padding-bottom: env(safe-area-inset-bottom);
+        /* 6. 安全区域适配 (Safe Area) */
+        /* 顶部内容偏移，适配灵动岛 */
+        .safe-area-top {
+            padding-top: calc(env(safe-area-inset-top) + 12px);
         }
         
-        .top-safe-area {
-             padding-top: calc(env(safe-area-inset-top) + 10px);
+        /* 底部内容偏移，确保不被黑条遮挡，但背景是铺满的 */
+        .safe-area-bottom {
+            /* 底部留出安全距离，再加一点点悬浮感 */
+            padding-bottom: env(safe-area-inset-bottom);
         }
     </style>
 </head>
-<body class="bg-gradient-radial">
+<body>
 
-    <!-- Main Interactive Grid -->
-    <div class="absolute inset-0 grid grid-cols-2 grid-rows-2 z-10">
+    <!-- 1. 背景层 (完全独立，强制铺满) -->
+    <div id="app-background"></div>
+
+    <!-- 2. 交互层 (四个点击区域) -->
+    <div id="interactive-layer" class="grid grid-cols-2 grid-rows-2">
         <div id="area-spades" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="spades"></div>
         <div id="area-hearts" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="hearts"></div>
         <div id="area-clubs" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="clubs"></div>
         <div id="area-diamonds" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="diamonds"></div>
     </div>
 
-    <!-- UI Layer -->
-    <div id="lock-screen-ui" class="absolute inset-0 z-20 pointer-events-none">
+    <!-- 3. UI 层 (时间、图标) -->
+    <div id="ui-layer">
         
-        <!-- Top Section -->
-        <div class="absolute top-0 left-0 right-0 flex flex-col items-center top-safe-area transition-all duration-500">
+        <!-- 顶部: 时间 -->
+        <div class="w-full flex flex-col items-center safe-area-top transition-all duration-500">
             <div id="date-display" class="ios-lock-date text-lg md:text-xl mb-2">Monday, June 3</div>
             <div class="flex items-baseline gap-2">
                 <div id="clock-time" class="ios-lock-time text-7xl md:text-9xl">09:41</div>
@@ -253,26 +240,28 @@
             </div>
         </div>
 
-        <!-- Bottom Section: 强制定位于真实的页面底部 (bottom: 0) -->
-        <div class="absolute bottom-0 left-0 right-0 px-12 transition-all duration-500 bottom-safe-area">
-            <!-- 图标容器：增加 mb-2 微调，使图标略微高于 Home Indicator -->
-            <div class="flex justify-between items-end w-full mb-3">
+        <!-- 底部: 图标与Home条 -->
+        <div class="w-full px-12 transition-all duration-500 safe-area-bottom">
+            <div class="flex justify-between items-end w-full mb-3 relative">
+                <!-- 左图标 -->
                 <div class="ios-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 </div>
                 
+                <!-- Home Indicator (白条) -->
+                <!-- 绝对定位在父容器底部，确保它永远在安全区域内 -->
+                <div class="absolute left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40 -bottom-1"></div>
+                
+                <!-- 右图标 -->
                 <div class="ios-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                 </div>
             </div>
         </div>
-
-        <!-- Home Indicator: 强制在最底部 -->
-        <div class="absolute bottom-[6px] left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40 z-30"></div>
     </div>
 
-    <!-- Passcode Screen -->
-    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center top-safe-area pt-12 text-white">
+    <!-- 4. 密码层 -->
+    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center safe-area-top pt-12 text-white">
         <div class="text-sm md:text-base mb-8 tracking-wide">Enter Passcode</div>
         <div class="flex gap-6 mb-20">
             <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
@@ -297,7 +286,7 @@
         <button id="cancel-passcode" class="mt-12 text-base font-medium tracking-wide hover:opacity-70 transition-opacity pb-8">Cancel</button>
     </div>
 
-    <!-- Result Overlay -->
+    <!-- 5. 结果展示层 -->
     <div id="result-overlay" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-3xl perspective-container flex flex-col items-center justify-center p-4 transition-opacity duration-500 opacity-0">
         <div id="card-container" class="playing-card w-[85vw] max-w-[300px] h-[420px] md:w-[360px] md:h-[520px] relative overflow-hidden select-none">
             <div class="absolute inset-0 card-texture z-0"></div>
@@ -371,23 +360,15 @@
             const rank = getRankDisplay(magicNumber);
             const isRoyal = ['J', 'Q', 'K'].includes(rank);
             const colorClass = suitColors[suit];
-
             suitDisplays.forEach(el => { el.style.writingMode = 'horizontal-tb'; el.style.textOrientation = 'mixed'; });
             centerSuitDisplay.style.fontSize = '';
-            
             royalBg.classList.toggle('hidden', !isRoyal);
             if(isRoyal) royalBg.style.color = (suit === 'hearts' || suit === 'diamonds') ? '#b91c1c' : '#1a1a1a';
-
             rankDisplays.forEach(el => { el.innerText = rank; el.className = `rank-display rank-font text-5xl md:text-6xl tracking-tighter ${colorClass}`; });
             suitDisplays.forEach(el => { el.innerText = suitChars[suit]; el.className = `suit-display text-4xl md:text-5xl mt-1 ${colorClass}`; });
-            
-            centerSuitDisplay.innerText = suitChars[suit];
-            centerSuitDisplay.className = `center-suit-display big-suit ${colorClass}`;
-
+            centerSuitDisplay.innerText = suitChars[suit]; centerSuitDisplay.className = `center-suit-display big-suit ${colorClass}`;
             createParticles(window.innerWidth / 2, window.innerHeight / 2, (suit === 'hearts' || suit === 'diamonds') ? '#c0392b' : '#2c3e50', '#c5a059');
-            
-            resultOverlay.classList.remove('hidden');
-            resultOverlay.classList.add('flex');
+            resultOverlay.classList.remove('hidden'); resultOverlay.classList.add('flex');
             requestAnimationFrame(() => {
                 resultOverlay.classList.remove('opacity-0');
                 setTimeout(() => cardContainer.classList.add('revealed'), 100);
@@ -425,7 +406,7 @@
         resultOverlay.addEventListener('click', (e) => { if (e.target === resultOverlay) closeResult(); });
         document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
-        const lockScreenUi = document.getElementById('lock-screen-ui');
+        const uiLayer = document.getElementById('ui-layer');
         const passcodeScreen = document.getElementById('passcode-screen');
         const dots = document.querySelectorAll('.dot');
         let startY = 0, isPasscodeActive = false, passcode = "";
@@ -437,15 +418,15 @@
 
         function showPasscodeScreen() {
             isPasscodeActive = true;
-            lockScreenUi.style.opacity = '0';
-            lockScreenUi.style.transform = 'translateY(-100vh)';
+            uiLayer.style.opacity = '0';
+            uiLayer.style.transform = 'translateY(-100vh)';
             passcodeScreen.classList.remove('translate-y-full'); passcodeScreen.classList.add('translate-y-0');
             document.querySelectorAll('.quadrant').forEach(q => q.style.pointerEvents = 'none');
         }
 
         function hidePasscodeScreen() {
             isPasscodeActive = false; passcode = ""; updateDots();
-            lockScreenUi.style.transform = 'translateY(0)'; lockScreenUi.style.opacity = '1';
+            uiLayer.style.transform = 'translateY(0)'; uiLayer.style.opacity = '1';
             passcodeScreen.classList.remove('translate-y-0'); passcodeScreen.classList.add('translate-y-full');
             setTimeout(() => document.querySelectorAll('.quadrant').forEach(q => q.style.pointerEvents = 'auto'), 500);
         }
@@ -470,19 +451,13 @@
         function revealJoker() {
             royalBg.classList.remove('hidden'); royalBg.style.color = '#333';
             rankDisplays.forEach(el => { el.innerHTML = '★'; el.className = `rank-display rank-font text-4xl md:text-5xl tracking-tighter text-red-700`; });
-            suitDisplays.forEach(el => {
-                el.innerText = 'JOKER'; el.style.writingMode = 'vertical-rl'; el.style.textOrientation = 'upright';
-                el.className = `suit-display text-[0.6rem] md:text-xs mt-1 font-bold tracking-widest text-black`;
-            });
+            suitDisplays.forEach(el => { el.innerText = 'JOKER'; el.style.writingMode = 'vertical-rl'; el.style.textOrientation = 'upright'; el.className = `suit-display text-[0.6rem] md:text-xs mt-1 font-bold tracking-widest text-black`; });
             const jokerSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" class="w-48 h-48 md:w-64 md:h-64 drop-shadow-xl"><defs><linearGradient id="hatGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" style="stop-color:#b91c1c;stop-opacity:1"/><stop offset="50%" style="stop-color:#000000;stop-opacity:1"/><stop offset="100%" style="stop-color:#b91c1c;stop-opacity:1"/></linearGradient></defs><path d="M70 160 Q 100 180, 130 160 L 120 140 L 100 150 L 80 140 Z" fill="#f1c40f" stroke="#000" stroke-width="1"/><path d="M60 100 Q 60 160, 100 170 Q 140 160, 140 100" fill="#fff" stroke="#333" stroke-width="1"/><path d="M60 100 L 140 100 L 100 80 Z" fill="#fff"/><path d="M60 100 C 30 60, 20 20, 40 40 Q 50 50, 80 90" fill="#000"/><circle cx="35" cy="35" r="7" fill="#f1c40f"/><path d="M140 100 C 170 60, 180 20, 160 40 Q 150 50, 120 90" fill="#000"/><circle cx="165" cy="35" r="7" fill="#f1c40f"/><path d="M80 90 Q 100 10, 120 90 Z" fill="#b91c1c"/><circle cx="100" cy="15" r="7" fill="#f1c40f"/><path d="M75 115 L 90 120 L 90 110 Z" fill="#000"/><path d="M125 115 L 110 120 L 110 110 Z" fill="#000"/><circle cx="100" cy="130" r="6" fill="#b91c1c"/><path d="M75 145 Q 100 165, 125 145" fill="none" stroke="#b91c1c" stroke-width="3" stroke-linecap="round"/><path d="M73 143 L 77 147 M 123 147 L 127 143" stroke="#000" stroke-width="1"/></svg><div class="text-2xl md:text-4xl font-serif font-bold text-red-700 mt-4 tracking-widest">JOKER</div>`;
             centerSuitDisplay.innerHTML = `<div class="flex flex-col items-center justify-center">${jokerSVG}</div>`;
             centerSuitDisplay.className = `center-suit-display big-suit`; centerSuitDisplay.style.fontSize = '';
             createParticles(window.innerWidth/2, window.innerHeight/2, '#b91c1c', '#f1c40f');
             resultOverlay.classList.remove('hidden'); resultOverlay.classList.add('flex');
-            requestAnimationFrame(() => {
-                resultOverlay.classList.remove('opacity-0');
-                setTimeout(() => cardContainer.classList.add('revealed'), 100);
-            });
+            requestAnimationFrame(() => { resultOverlay.classList.remove('opacity-0'); setTimeout(() => cardContainer.classList.add('revealed'), 100); });
             passcode = ""; updateDots();
             if (navigator.vibrate) navigator.vibrate([50, 50, 100]);
         }
@@ -492,9 +467,6 @@
         const handleFirst = () => { requestWakeLock(); document.removeEventListener('touchstart', handleFirst); document.removeEventListener('click', handleFirst); };
         document.addEventListener('touchstart', handleFirst); document.addEventListener('click', handleFirst);
         document.addEventListener('visibilitychange', async () => { if (wakeLock !== null && document.visibilityState === 'visible') requestWakeLock(); });
-        
-        // 再次触发高度修正，防止部分 iOS 在页面加载完成后高度变化
-        window.addEventListener('load', setAppHeight);
     </script>
 </body>
 </html>
