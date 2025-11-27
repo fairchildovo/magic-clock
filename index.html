@@ -2,19 +2,17 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    
-    <!-- 参考 1.html 的 Viewport 设置，加入了 viewport-fit=cover -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no, viewport-fit=cover">
+    <!-- 关键：viewport-fit=cover 必须有，且禁止缩放 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
     <title>Magic Clock</title>
     
     <!-- PWA 配置 -->
-    <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- 保持沉浸式体验 -->
+    <!-- 改回 default，配合全屏黑色背景，这是最稳妥的方案 -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
     <meta name="format-detection" content="telephone=no">
-    <meta name="mobile-web-app-capable" content="yes">
     
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon.png">
@@ -25,16 +23,12 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Italiana&display=swap');
 
-        /* 1. CSS 变量定义 */
+        /* 全局重置 */
         :root {
             --bg-color: #000000;
             --text-color: #ffffff;
-            /* 安全区域变量 */
-            --safe-top: env(safe-area-inset-top);
-            --safe-bottom: env(safe-area-inset-bottom);
         }
 
-        /* 2. 全局重置，参考 1.html */
         *, *::before, *::after {
             margin: 0;
             padding: 0;
@@ -43,40 +37,36 @@
         }
 
         html {
-            background-color: var(--bg-color);
-            -webkit-text-size-adjust: 100%;
-            /* 禁止滚动 */
+            background-color: #000000;
+            /* 禁止 html 滚动 */
             overflow: hidden;
-            height: 100%;
+            -webkit-text-size-adjust: 100%;
         }
         
         body {
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            background-color: #000000;
             font-family: 'Inter', sans-serif;
-            /* 关键：使用 fixed 锁死 body，防止 iOS 回弹 */
+            /* 核心修改：强制四边钉死，不依赖 vh */
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            right: 0;
+            bottom: 0;
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
             touch-action: none;
         }
 
-        /* 3. 背景层：独立于内容，强制铺满物理屏幕 */
+        /* 背景层：独立绝对定位，铺满所有空间 */
         #app-background {
-            position: fixed;
-            inset: 0; /* top/left/right/bottom: 0 */
+            position: absolute;
+            inset: 0;
             z-index: 0;
             background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
-            /* 确保背景不被压缩 */
-            height: 100vh; 
-            width: 100vw;
         }
 
+        /* 噪点纹理 */
         #app-background::before {
             content: "";
             position: absolute;
@@ -87,19 +77,21 @@
             animation: grain 8s steps(10) infinite;
         }
 
-        /* 4. 主容器：使用 100dvh 适配动态高度 */
-        #main-container {
-            position: relative;
+        /* 主界面容器：Flex 布局，上下撑开 */
+        #lock-screen-container {
+            position: absolute;
+            inset: 0;
             z-index: 10;
-            width: 100%;
-            /* dvh = Dynamic Viewport Height，自动适应 Safari 工具栏收缩/展开 */
-            height: 100dvh; 
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: space-between; /* 关键：上下两端对齐 */
+            /* 底部留出安全距离，内容自动上移，背景不影响 */
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-top: env(safe-area-inset-top); 
+            pointer-events: none; /* 让点击穿透给后面的 Grid */
         }
 
-        /* 交互区域网格 */
+        /* 交互点击层 (Grid) */
         .click-grid {
             position: absolute;
             inset: 0;
@@ -112,41 +104,93 @@
         .quadrant {
             width: 100%;
             height: 100%;
-            /* 调试时可开启背景色查看点击区域 */
-            /* border: 1px solid rgba(255,255,255,0.1); */ 
         }
 
-        /* 顶部 UI 区域 */
-        .top-ui {
+        /* 顶部内容区 */
+        .top-section {
             width: 100%;
-            /* 加上安全区域 padding */
-            padding-top: calc(var(--safe-top) + 20px); 
             display: flex;
             flex-direction: column;
             align-items: center;
-            pointer-events: none; /* 让点击穿透给下方的网格 */
-            z-index: 20;
+            padding-top: 20px; /* 额外一点顶部呼吸空间 */
         }
 
-        /* 底部 UI 区域 */
-        .bottom-ui {
+        /* 底部内容区 */
+        .bottom-section {
             width: 100%;
-            /* 加上安全区域 padding */
-            padding-bottom: var(--safe-bottom);
-            z-index: 20;
-            pointer-events: none;
-        }
-
-        /* 底部内容包装器：用于精细控制距离 */
-        .bottom-content-wrapper {
-            padding: 0 40px 20px 40px; /* 左右边距和底部留白 */
+            padding: 0 40px 10px 40px; /* 左右边距和底部微调 */
             display: flex;
             justify-content: space-between;
-            align-items: flex-end;
+            align-items: flex-end; /* 图标底部对齐 */
             position: relative;
         }
 
-        /* 动画定义 */
+        /* 密码界面：使用 Flex 居中代替 Padding */
+        #passcode-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            background-color: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            
+            /* 核心修改：使用 Flex 垂直居中，解决挤压问题 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center; /* 垂直居中 */
+            align-items: center;     /* 水平居中 */
+            
+            /* 动画属性 */
+            transform: translateY(100%);
+            transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+            
+            /* 确保不被刘海遮挡 */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* 键盘按钮样式优化 */
+        .keypad-btn {
+            width: 75px; 
+            height: 75px; 
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            /* 解决点击高亮丑陋的问题 */
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        /* 增加键盘网格间距，防止误触 */
+        .keypad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px 32px; /* 行间距 列间距 */
+            margin-bottom: 40px;
+        }
+
+        /* Home Indicator 白条 */
+        .home-indicator {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 8px; /* 相对于 bottom-section 底部 */
+            width: 130px;
+            height: 5px;
+            background-color: #ffffff;
+            border-radius: 100px;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        /* 其他通用样式保持不变 */
         @keyframes grain {
             0%, 100% { transform:translate(0, 0); }
             10% { transform:translate(-5%, -10%); }
@@ -160,52 +204,27 @@
             90% { transform:translate(-10%, 10%); }
         }
 
-        /* 文字和图标样式 */
-        .ios-lock-time {
-            font-family: 'Inter', sans-serif;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            color: rgba(255, 255, 255, 0.95);
-            line-height: 1;
-        }
-
-        .ios-lock-date {
-            font-family: 'Inter', sans-serif;
-            font-weight: 500;
-            color: rgba(255, 255, 255, 0.8);
-            text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-            letter-spacing: 0.02em;
-        }
-
-        .ios-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: rgba(30, 30, 30, 0.6);
-            backdrop-filter: blur(10px);
+        .ios-lock-time { font-family: 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); color: rgba(255, 255, 255, 0.95); line-height: 1; }
+        .ios-lock-date { font-family: 'Inter', sans-serif; font-weight: 500; color: rgba(255, 255, 255, 0.8); text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); letter-spacing: 0.02em; }
+        .ios-icon { width: 50px; height: 50px; border-radius: 50%; background: rgba(30, 30, 30, 0.6); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; color: white; transition: background 0.2s; }
+        
+        /* 结果层全屏适配 */
+        #result-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            background: rgba(0,0,0,0.95);
+            backdrop-filter: blur(20px);
             display: flex;
-            align-items: center;
+            flex-direction: column;
             justify-content: center;
-            color: white;
-            transition: background 0.2s;
-        }
-
-        /* Home Indicator 白条 */
-        .home-indicator {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            bottom: 8px; /* 距离底部容器边缘的距离 */
-            width: 130px;
-            height: 5px;
-            background-color: #ffffff;
-            border-radius: 100px;
-            opacity: 0.4;
+            align-items: center;
+            opacity: 0;
             pointer-events: none;
+            transition: opacity 0.5s ease;
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
-        /* 卡片与弹窗样式 */
         .perspective-container { perspective: 1200px; }
         .playing-card { background: #fdfbf7; box-shadow: 0 2px 5px rgba(0,0,0,0.2), 0 10px 20px rgba(0,0,0,0.3), 0 30px 60px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.05); border-radius: 18px; position: relative; transform-style: preserve-3d; backface-visibility: hidden; transform: rotateY(90deg); transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid #dcdcdc; }
         .playing-card.revealed { transform: rotateY(0deg) rotateZ(1deg) translateY(-20px); }
@@ -228,18 +247,8 @@
         
         .glass-btn { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.8rem; padding: 1rem 2.5rem; border-radius: 9999px; transition: all 0.3s ease; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
         .glass-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; transform: translateY(-2px); box-shadow: 0 0 30px rgba(255, 255, 255, 0.1); }
-        .keypad-btn { width: 75px; height: 75px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: background 0.2s; border: none; outline: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
         .keypad-btn:active { background: rgba(255, 255, 255, 0.4); }
         .dot { transition: background-color 0.2s; } .dot.filled { background-color: white; }
-
-        /* 密码与结果层的适配 */
-        #passcode-screen, #result-overlay {
-            height: 100dvh;
-            /* 确保覆盖整个视口 */
-            top: 0;
-            left: 0;
-            width: 100%;
-        }
     </style>
 </head>
 <body>
@@ -247,19 +256,11 @@
     <!-- 1. 背景层：独立固定，铺满物理屏幕 -->
     <div id="app-background"></div>
 
-    <!-- 2. 主容器：使用 100dvh 和 Flex 布局管理内容 -->
-    <div id="main-container">
+    <!-- 2. 主界面：使用 Flex 布局上下撑开 -->
+    <div id="lock-screen-container">
         
-        <!-- 交互点击层 (Grid) -->
-        <div class="click-grid">
-            <div id="area-spades" class="quadrant" data-suit="spades"></div>
-            <div id="area-hearts" class="quadrant" data-suit="hearts"></div>
-            <div id="area-clubs" class="quadrant" data-suit="clubs"></div>
-            <div id="area-diamonds" class="quadrant" data-suit="diamonds"></div>
-        </div>
-
-        <!-- 顶部 UI -->
-        <div class="top-ui">
+        <!-- 顶部内容 -->
+        <div class="top-section">
             <div id="date-display" class="ios-lock-date text-lg md:text-xl mb-2">Monday, June 3</div>
             <div class="flex items-baseline gap-2">
                 <div id="clock-time" class="ios-lock-time text-7xl md:text-9xl">09:41</div>
@@ -267,53 +268,62 @@
             </div>
         </div>
 
-        <!-- 底部 UI -->
-        <div class="bottom-ui">
-            <div class="bottom-content-wrapper">
-                <!-- 左图标 -->
-                <div class="ios-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                </div>
-                
-                <!-- Home Indicator (白条) -->
-                <div class="home-indicator"></div>
-                
-                <!-- 右图标 -->
-                <div class="ios-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                </div>
+        <!-- 底部内容 -->
+        <div class="bottom-section">
+            <div class="ios-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
+            
+            <div class="home-indicator"></div>
+            
+            <div class="ios-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             </div>
         </div>
     </div>
 
-    <!-- 密码层 -->
-    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center text-white" style="padding-top: calc(env(safe-area-inset-top) + 12vh);">
-        <div class="text-sm md:text-base mb-8 tracking-wide">Enter Passcode</div>
-        <div class="flex gap-6 mb-20">
-            <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
-            <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
-            <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
-            <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
+    <!-- 交互点击层 (隐形) -->
+    <div class="click-grid">
+        <div id="area-spades" class="quadrant cursor-pointer" data-suit="spades"></div>
+        <div id="area-hearts" class="quadrant cursor-pointer" data-suit="hearts"></div>
+        <div id="area-clubs" class="quadrant cursor-pointer" data-suit="clubs"></div>
+        <div id="area-diamonds" class="quadrant cursor-pointer" data-suit="diamonds"></div>
+    </div>
+
+    <!-- 密码层 (修复：使用 Flex 居中，而非 padding) -->
+    <div id="passcode-screen">
+        <!-- 容器：自动居中 -->
+        <div class="flex flex-col items-center">
+            <div class="text-sm md:text-base mb-8 tracking-wide">Enter Passcode</div>
+            
+            <div class="flex gap-6 mb-12">
+                <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
+                <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
+                <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
+                <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
+            </div>
+            
+            <div class="keypad-grid w-full max-w-[320px]">
+                <button class="keypad-btn" data-key="1"><span class="text-3xl">1</span></button>
+                <button class="keypad-btn" data-key="2"><span class="text-3xl">2</span></button>
+                <button class="keypad-btn" data-key="3"><span class="text-3xl">3</span></button>
+                <button class="keypad-btn" data-key="4"><span class="text-3xl">4</span></button>
+                <button class="keypad-btn" data-key="5"><span class="text-3xl">5</span></button>
+                <button class="keypad-btn" data-key="6"><span class="text-3xl">6</span></button>
+                <button class="keypad-btn" data-key="7"><span class="text-3xl">7</span></button>
+                <button class="keypad-btn" data-key="8"><span class="text-3xl">8</span></button>
+                <button class="keypad-btn" data-key="9"><span class="text-3xl">9</span></button>
+                <div></div> <!-- 空占位 -->
+                <button class="keypad-btn" data-key="0"><span class="text-3xl">0</span></button>
+                <div></div> <!-- 空占位 -->
+            </div>
+            
+            <button id="cancel-passcode" class="text-base font-medium tracking-wide hover:opacity-70 transition-opacity p-4">Cancel</button>
         </div>
-        <div class="grid grid-cols-3 gap-x-8 gap-y-6 w-full max-w-[300px]">
-            <button class="keypad-btn" data-key="1"><span class="text-3xl">1</span></button>
-            <button class="keypad-btn" data-key="2"><span class="text-3xl">2</span></button>
-            <button class="keypad-btn" data-key="3"><span class="text-3xl">3</span></button>
-            <button class="keypad-btn" data-key="4"><span class="text-3xl">4</span></button>
-            <button class="keypad-btn" data-key="5"><span class="text-3xl">5</span></button>
-            <button class="keypad-btn" data-key="6"><span class="text-3xl">6</span></button>
-            <button class="keypad-btn" data-key="7"><span class="text-3xl">7</span></button>
-            <button class="keypad-btn" data-key="8"><span class="text-3xl">8</span></button>
-            <button class="keypad-btn" data-key="9"><span class="text-3xl">9</span></button>
-            <div class="flex justify-center items-center"></div>
-            <button class="keypad-btn" data-key="0"><span class="text-3xl">0</span></button>
-            <div class="flex justify-center items-center"></div>
-        </div>
-        <button id="cancel-passcode" class="mt-12 text-base font-medium tracking-wide hover:opacity-70 transition-opacity pb-8">Cancel</button>
     </div>
 
     <!-- 结果展示层 -->
-    <div id="result-overlay" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-3xl perspective-container flex flex-col items-center justify-center p-4 transition-opacity duration-500 opacity-0">
+    <div id="result-overlay">
         <div id="card-container" class="playing-card w-[85vw] max-w-[300px] h-[420px] md:w-[360px] md:h-[520px] relative overflow-hidden select-none">
             <div class="absolute inset-0 card-texture z-0"></div>
             <div class="card-inner-border"></div>
@@ -335,7 +345,7 @@
             </div>
             <div class="absolute inset-0 bg-gradient-to-tr from-white/30 via-transparent to-black/5 opacity-40 pointer-events-none mix-blend-overlay"></div>
         </div>
-        <button id="close-result" class="glass-btn mt-8 md:mt-16">Close Reveal</button>
+        <button id="close-result" class="glass-btn mt-8 md:mt-16 pointer-events-auto">Close Reveal</button>
     </div>
 
     <script>
@@ -394,16 +404,28 @@
             suitDisplays.forEach(el => { el.innerText = suitChars[suit]; el.className = `suit-display text-4xl md:text-5xl mt-1 ${colorClass}`; });
             centerSuitDisplay.innerText = suitChars[suit]; centerSuitDisplay.className = `center-suit-display big-suit ${colorClass}`;
             createParticles(window.innerWidth / 2, window.innerHeight / 2, (suit === 'hearts' || suit === 'diamonds') ? '#c0392b' : '#2c3e50', '#c5a059');
-            resultOverlay.classList.remove('hidden'); resultOverlay.classList.add('flex');
-            requestAnimationFrame(() => { resultOverlay.classList.remove('opacity-0'); setTimeout(() => cardContainer.classList.add('revealed'), 100); });
+            
+            // 结果页显示
+            resultOverlay.classList.remove('hidden');
+            resultOverlay.style.pointerEvents = 'auto'; // 启用点击
+            requestAnimationFrame(() => { 
+                resultOverlay.style.opacity = '1'; 
+                setTimeout(() => cardContainer.classList.add('revealed'), 100); 
+            });
             if (navigator.vibrate) navigator.vibrate([20, 30, 20]);
         }
 
         function closeResult() {
             cardContainer.classList.remove('revealed');
-            resultOverlay.classList.add('opacity-0');
+            resultOverlay.style.opacity = '0';
+            resultOverlay.style.pointerEvents = 'none'; // 禁用点击
+            
+            // 如果密码界面打开了，关闭它
             if (isPasscodeActive) hidePasscodeScreen();
-            setTimeout(() => { resultOverlay.classList.add('hidden'); resultOverlay.classList.remove('flex'); }, 600);
+            
+            setTimeout(() => { 
+                resultOverlay.classList.add('hidden'); 
+            }, 600);
         }
 
         function createParticles(x, y, pColor, sColor) {
@@ -429,11 +451,12 @@
         resultOverlay.addEventListener('click', (e) => { if (e.target === resultOverlay) closeResult(); });
         document.addEventListener('dblclick', (e) => e.preventDefault(), { passive: false });
 
-        const mainContainer = document.getElementById('main-container');
+        const lockScreenContainer = document.getElementById('lock-screen-container');
         const passcodeScreen = document.getElementById('passcode-screen');
         const dots = document.querySelectorAll('.dot');
         let startY = 0, isPasscodeActive = false, passcode = "";
 
+        // 触摸滑动检测
         document.addEventListener('touchstart', (e) => { if (!isPasscodeActive) startY = e.touches[0].clientY; }, { passive: false });
         document.addEventListener('touchend', (e) => {
             if (!isPasscodeActive && startY - e.changedTouches[0].clientY > 50) showPasscodeScreen();
@@ -441,17 +464,19 @@
 
         function showPasscodeScreen() {
             isPasscodeActive = true;
-            mainContainer.style.opacity = '0';
-            // 简单的位移，避免复杂动画导致闪烁
-            mainContainer.style.transform = 'translateY(-50px)';
-            passcodeScreen.classList.remove('translate-y-full'); passcodeScreen.classList.add('translate-y-0');
+            // 锁定主界面
+            lockScreenContainer.style.opacity = '0';
+            // 显示密码层
+            passcodeScreen.style.transform = 'translateY(0)';
             document.querySelectorAll('.quadrant').forEach(q => q.style.pointerEvents = 'none');
         }
 
         function hidePasscodeScreen() {
             isPasscodeActive = false; passcode = ""; updateDots();
-            mainContainer.style.transform = 'translateY(0)'; mainContainer.style.opacity = '1';
-            passcodeScreen.classList.remove('translate-y-0'); passcodeScreen.classList.add('translate-y-full');
+            // 恢复主界面
+            lockScreenContainer.style.opacity = '1';
+            // 隐藏密码层
+            passcodeScreen.style.transform = 'translateY(100%)';
             setTimeout(() => document.querySelectorAll('.quadrant').forEach(q => q.style.pointerEvents = 'auto'), 500);
         }
 
@@ -480,8 +505,15 @@
             centerSuitDisplay.innerHTML = `<div class="flex flex-col items-center justify-center">${jokerSVG}</div>`;
             centerSuitDisplay.className = `center-suit-display big-suit`; centerSuitDisplay.style.fontSize = '';
             createParticles(window.innerWidth/2, window.innerHeight/2, '#b91c1c', '#f1c40f');
-            resultOverlay.classList.remove('hidden'); resultOverlay.classList.add('flex');
-            requestAnimationFrame(() => { resultOverlay.classList.remove('opacity-0'); setTimeout(() => cardContainer.classList.add('revealed'), 100); });
+            
+            // 结果页显示逻辑
+            resultOverlay.classList.remove('hidden');
+            resultOverlay.style.pointerEvents = 'auto'; 
+            requestAnimationFrame(() => { 
+                resultOverlay.style.opacity = '1'; 
+                setTimeout(() => cardContainer.classList.add('revealed'), 100); 
+            });
+            
             passcode = ""; updateDots();
             if (navigator.vibrate) navigator.vibrate([50, 50, 100]);
         }
