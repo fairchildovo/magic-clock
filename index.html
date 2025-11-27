@@ -20,7 +20,7 @@
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Italiana&display=swap');
 
         /* ----------------------------------------------------------------
-           v2.5: 原生风格手电筒图标 + 保持 v2.3 布局
+           v2.7: PWA 检测提示 + 之前所有特性
            ---------------------------------------------------------------- */
         
         :root { background-color: #000000; }
@@ -47,6 +47,7 @@
             top: -20vh; left: -20vw; right: -20vw; bottom: -20vh;
             z-index: 0;
             background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
+            transition: background 0.8s ease;
             pointer-events: none;
         }
         #layer-background::before {
@@ -82,8 +83,6 @@
             display: flex; align-items: center; justify-content: center; 
             color: white; transition: background 0.2s; pointer-events: auto; 
         }
-        
-        /* 调整SVG大小以适应按钮 */
         .ios-icon svg { width: 30px; height: 30px; }
         
         .glass-btn { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.7); letter-spacing: 0.2em; text-transform: uppercase; font-size: 0.8rem; padding: 1rem 2.5rem; border-radius: 9999px; transition: all 0.3s ease; box-shadow: 0 0 20px rgba(0,0,0,0.5); pointer-events: auto; }
@@ -91,7 +90,7 @@
         .keypad-btn:active { background: rgba(255, 255, 255, 0.4); }
         .dot { transition: background-color 0.2s; } .dot.filled { background-color: white; }
 
-        /* 卡片 */
+        /* 卡片 & 粒子 */
         .perspective-container { perspective: 1200px; }
         .playing-card { background: #fdfbf7; box-shadow: 0 2px 5px rgba(0,0,0,0.2), 0 10px 20px rgba(0,0,0,0.3), 0 30px 60px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.05); border-radius: 18px; position: relative; transform-style: preserve-3d; backface-visibility: hidden; transform: rotateY(90deg); transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); border: 1px solid #dcdcdc; }
         .playing-card.revealed { transform: rotateY(0deg) rotateZ(1deg) translateY(-20px); }
@@ -107,7 +106,33 @@
         @keyframes pop-particle { 0% { transform: translate(0, 0) rotate(0deg) scale(0.5); opacity: 1; } 50% { opacity: 1; } 100% { transform: translate(var(--x), var(--y)) rotate(var(--r)) scale(0); opacity: 0; } }
         @keyframes grain { 0%, 100% { transform:translate(0, 0); } 10% { transform:translate(-5%, -10%); } 20% { transform:translate(-15%, 5%); } 30% { transform:translate(7%, -25%); } 40% { transform:translate(-5%, 25%); } 50% { transform:translate(-15%, 10%); } 60% { transform:translate(15%, 0%); } 70% { transform:translate(0%, 15%); } 80% { transform:translate(3%, 35%); } 90% { transform:translate(-10%, 10%); } }
 
-        .version-tag { position: fixed; top: 5px; left: 5px; color: rgba(255, 255, 255, 0.15); font-size: 10px; font-family: 'JetBrains Mono', monospace; z-index: 200; pointer-events: none; }
+        /* 设置卡片样式 */
+        .settings-card {
+            background: rgba(30, 30, 30, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 2rem;
+            width: 85vw;
+            max-width: 320px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transform: scale(0.9);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .settings-visible .settings-card { transform: scale(1); opacity: 1; }
+        .settings-title { font-size: 1.2rem; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 1.5rem; color: rgba(255, 255, 255, 0.9); }
+        .color-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 2rem; }
+        .color-option { width: 45px; height: 45px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); cursor: pointer; transition: transform 0.2s, border-color 0.2s; }
+        .color-option:active { transform: scale(0.9); }
+        .color-option.selected { border-color: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        .settings-version { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: rgba(255, 255, 255, 0.3); margin-top: 1.5rem; }
+
     </style>
 </head>
 <body>
@@ -133,14 +158,11 @@
     </div>
 
     <!-- 4. 按钮层 -->
-    
-   <!-- 左侧手电筒 (已替换为：线性描边风格 + 仿原生造型) -->
+    <!-- 左侧手电筒 -->
     <div class="fixed-bottom-btn btn-left">
         <div class="ios-icon">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <!-- 手电筒主体：线条描边，头部略宽，柄部收窄 -->
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 4v5l-1.5 2v8a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-8l-1.5-2V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z" />
-                <!-- 中间开关细节 -->
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 13v2" />
             </svg>
         </div>
@@ -200,9 +222,32 @@
         <button id="close-result" class="glass-btn mt-8 md:mt-16" style="pointer-events: auto;">Close Reveal</button>
     </div>
 
-    <div class="version-tag">v2.5</div>
+    <!-- 设置界面 Overlay -->
+    <div id="settings-overlay" class="fixed inset-0 z-60 hidden bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-opacity duration-300 opacity-0" style="height:100vh;">
+        <div class="settings-card">
+            <div class="settings-title">Background</div>
+            <div class="color-grid">
+                <div class="color-option selected" style="background: #000;" data-color="radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%)"></div>
+                <div class="color-option" style="background: #0f172a;" data-color="radial-gradient(circle at center, #1e293b 0%, #020617 100%)"></div>
+                <div class="color-option" style="background: #2e1065;" data-color="radial-gradient(circle at center, #4c1d95 0%, #000000 100%)"></div>
+                <div class="color-option" style="background: #052e16;" data-color="radial-gradient(circle at center, #14532d 0%, #000000 100%)"></div>
+            </div>
+            <button id="close-settings" class="glass-btn" style="padding: 0.8rem 2rem; font-size: 0.75rem;">Done</button>
+            <div class="settings-version">v2.7</div>
+        </div>
+    </div>
 
     <script>
+        // --- 新增：PWA 安装提示 ---
+        if (('standalone' in window.navigator) && window.navigator.standalone) {
+            // 如果已经添加到主屏幕，不执行操作
+        } else {
+            // 弹出提示框
+            setTimeout(() => {
+                 alert('请点击浏览器分享按钮，选择“添加到主屏幕”将应用添加到桌面');
+            }, 500);
+        }
+
         // 配置 & 状态
         const MIN_SEC = 11;
         const MAX_SEC = 23;
@@ -221,6 +266,12 @@
         const centerSuitDisplay = document.querySelector('.center-suit-display');
         const royalBg = document.getElementById('royal-bg');
         
+        // 设置相关 DOM
+        const settingsOverlay = document.getElementById('settings-overlay');
+        const closeSettingsBtn = document.getElementById('close-settings');
+        const backgroundLayer = document.getElementById('layer-background');
+        const colorOptions = document.querySelectorAll('.color-option');
+
         const suitColors = { 'spades': 'suit-colors-black', 'hearts': 'suit-colors-red', 'clubs': 'suit-colors-black', 'diamonds': 'suit-colors-red' };
         const suitChars = { 'spades': '♠', 'hearts': '♥', 'clubs': '♣', 'diamonds': '♦' };
         function getRankDisplay(val) { const map = { 11: 'A', 12: '2', 13: '3', 14: '4', 15: '5', 16: '6', 17: '7', 18: '8', 19: '9', 20: '10', 21: 'J', 22: 'Q', 23: 'K' }; return map[val] || val; }
@@ -333,7 +384,13 @@
             if (passcode.length < 4) {
                 passcode += btn.getAttribute('data-key'); updateDots();
                 if (navigator.vibrate) navigator.vibrate(10);
-                if (passcode.length === 4) setTimeout(revealJoker, 300);
+                if (passcode.length === 4) {
+                    if (passcode === '0000') {
+                        setTimeout(showSettings, 300);
+                    } else {
+                        setTimeout(revealJoker, 300);
+                    }
+                }
             }
         }));
 
@@ -351,6 +408,35 @@
             if (navigator.vibrate) navigator.vibrate([50, 50, 100, 50, 50, 50, 100]);
         }
         function updateDots() { dots.forEach((d, i) => i < passcode.length ? d.classList.add('filled') : d.classList.remove('filled')); }
+
+        /* --- 设置界面逻辑 --- */
+        function showSettings() {
+            settingsOverlay.classList.remove('hidden');
+            settingsOverlay.classList.add('settings-visible'); // Trigger scale animation
+            requestAnimationFrame(() => { settingsOverlay.classList.remove('opacity-0'); });
+            passcode = ""; updateDots();
+        }
+
+        function closeSettings() {
+            settingsOverlay.classList.remove('settings-visible');
+            settingsOverlay.classList.add('opacity-0');
+            setTimeout(() => { settingsOverlay.classList.add('hidden'); hidePasscodeScreen(); }, 300);
+        }
+
+        closeSettingsBtn.addEventListener('click', closeSettings);
+        settingsOverlay.addEventListener('click', e => { if (e.target === settingsOverlay) closeSettings(); });
+
+        // 颜色切换逻辑
+        colorOptions.forEach(opt => {
+            opt.addEventListener('click', () => {
+                // 移除所有选中状态
+                colorOptions.forEach(o => o.classList.remove('selected'));
+                // 添加当前选中状态
+                opt.classList.add('selected');
+                // 切换背景
+                backgroundLayer.style.background = opt.getAttribute('data-color');
+            });
+        });
 
         let wakeLock = null;
         async function requestWakeLock() { if ('wakeLock' in navigator) try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){} }
