@@ -11,7 +11,7 @@
     <meta name="theme-color" content="#000000">
     <meta name="apple-mobile-web-app-title" content="Magic Clock">
     
-    <!-- App Icon (Modified to use PNG) -->
+    <!-- App Icon (PNG) -->
     <link rel="icon" type="image/png" href="icon.png">
     <link rel="apple-touch-icon" href="icon.png">
     
@@ -28,16 +28,19 @@
             background-color: #000000;
         }
 
+        /* --- 核心修复：使用 dvh 单位适应 iOS Safari 地址栏 --- */
         html {
             background-color: #000000;
-            height: 100%;
-            width: 100%;
+            height: 100dvh; /* Dynamic Viewport Height */
+            width: 100vw;
             overflow: hidden;
-            position: fixed; /* Lock body to prevent bounce */
+            position: fixed; /* 锁定页面防止回弹 */
+            inset: 0; /* 强制拉伸至四边 */
         }
+
         body {
             background-color: #000000;
-            height: 100%;
+            height: 100dvh; /* 确保 body 也使用动态高度 */
             width: 100%;
             margin: 0;
             padding: 0;
@@ -47,16 +50,23 @@
             -webkit-user-select: none;
             touch-action: manipulation;
             font-family: 'Inter', sans-serif;
-            /* Ensure content extends under status bar */
+            
+            /* 确保内容延伸到刘海屏和底部横条区域 */
             padding-top: env(safe-area-inset-top); 
             padding-bottom: env(safe-area-inset-bottom);
+            
             box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
         }
         
         /* Deep Ambient Background - Darker */
         .bg-gradient-radial {
             background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
             position: relative;
+            flex: 1; /* 自动填满剩余空间 */
+            width: 100%;
+            height: 100%;
         }
 
         /* Subtle animated grain for texture */
@@ -386,7 +396,7 @@
         }
     </style>
 </head>
-<body class="h-screen w-screen bg-gradient-radial flex flex-col relative">
+<body class="bg-gradient-radial">
 
     <!-- Main Interactive Grid (Z-Index 10) -->
     <div class="absolute inset-0 grid grid-cols-2 grid-rows-2 z-10">
