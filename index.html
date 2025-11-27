@@ -8,7 +8,7 @@
     
     <!-- PWA 设置 -->
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <!-- 改为 default 试试，有时 black-translucent 会导致布局计算怪异，但配合下面的 CSS 应该没问题 -->
+    <!-- 核心修复点：必须是 black-translucent，否则 iOS 会强制给底部和顶部加黑条 -->
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
     <title>Magic Clock</title>
@@ -24,16 +24,20 @@
 
         :root {
             background-color: #000000;
+            /* 定义安全区域变量 */
+            --sat: env(safe-area-inset-top);
+            --sab: env(safe-area-inset-bottom);
         }
 
-        /* 2. 根元素重置 */
+        /* 2. 根元素重置 - 使用 dvh 解决 iOS 视口计算问题 */
         html {
             background-color: #000000;
             margin: 0;
             padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden; /* 禁止滚动 */
+            width: 100vw;
+            /* 核心修复：100dvh 代表动态视口高度，能完美覆盖全屏 */
+            height: 100dvh; 
+            overflow: hidden;
             -webkit-text-size-adjust: 100%;
         }
         
@@ -41,30 +45,27 @@
             background-color: #000000;
             margin: 0;
             padding: 0;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100dvh;
             overflow: hidden;
             user-select: none;
             -webkit-user-select: none;
             touch-action: none;
             font-family: 'Inter', sans-serif;
-            /* 关键：防止 iOS 橡皮筋回弹效果暴露底色 */
             position: fixed;
             inset: 0;
         }
         
-        /* 3. 背景层：强制拉伸到物理边缘 (关键修复) */
+        /* 3. 背景层：无视安全区域，强制拉伸到物理边缘 */
         #app-background {
             position: fixed;
             top: 0;
             left: 0;
-            right: 0;
-            bottom: 0;
+            width: 100vw;
+            height: 100dvh; /* 强制铺满 */
             z-index: 0;
             background: radial-gradient(circle at center, #050505 0%, #000000 60%, #000000 100%);
-            /* 确保背景延伸到所有区域，不留任何死角 */
-            height: 100vh; 
-            width: 100vw;
+            pointer-events: none;
         }
 
         /* 噪点纹理 */
@@ -78,23 +79,21 @@
             animation: grain 8s steps(10) infinite;
         }
 
-        /* 4. 交互层：同样强制拉伸 */
+        /* 4. 交互层：必须铺满全屏以捕捉所有点击 */
         #interactive-layer {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            inset: 0; /* top/left/right/bottom: 0 的简写 */
+            width: 100vw;
+            height: 100dvh;
             z-index: 10;
         }
 
         /* 5. UI 层：负责避让安全区域 */
         #ui-layer {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            inset: 0;
+            width: 100vw;
+            height: 100dvh;
             z-index: 20;
             pointer-events: none;
             display: flex;
@@ -102,7 +101,6 @@
             justify-content: space-between;
         }
 
-        /* 动画定义 */
         @keyframes grain {
             0%, 100% { transform:translate(0, 0); }
             10% { transform:translate(-5%, -10%); }
@@ -120,7 +118,6 @@
             transition: background-color 0.2s ease;
             position: relative;
             overflow: hidden;
-            /* 确保点击区域铺满 */
             height: 100%; 
             width: 100%;
         }
@@ -205,13 +202,13 @@
         /* 6. 安全区域适配 (Safe Area) */
         /* 顶部内容偏移，适配灵动岛 */
         .safe-area-top {
-            padding-top: calc(env(safe-area-inset-top) + 12px);
+            padding-top: calc(var(--sat) + 12px);
         }
         
-        /* 底部内容偏移，确保不被黑条遮挡，但背景是铺满的 */
+        /* 底部内容偏移 */
         .safe-area-bottom {
-            /* 底部留出安全距离，再加一点点悬浮感 */
-            padding-bottom: env(safe-area-inset-bottom);
+            /* 底部 UI 使用 padding 撑起，但背景依然铺在下面 */
+            padding-bottom: var(--sab);
         }
     </style>
 </head>
@@ -221,6 +218,7 @@
     <div id="app-background"></div>
 
     <!-- 2. 交互层 (四个点击区域) -->
+    <!-- 使用 inset-0 确保铺满，包括安全区域背面 -->
     <div id="interactive-layer" class="grid grid-cols-2 grid-rows-2">
         <div id="area-spades" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="spades"></div>
         <div id="area-hearts" class="quadrant flex items-center justify-center relative cursor-pointer" data-suit="hearts"></div>
@@ -249,8 +247,8 @@
                 </div>
                 
                 <!-- Home Indicator (白条) -->
-                <!-- 绝对定位在父容器底部，确保它永远在安全区域内 -->
-                <div class="absolute left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40 -bottom-1"></div>
+                <!-- 调整了位置，确保它相对于 safe-area-bottom 正常显示 -->
+                <div class="absolute left-1/2 transform -translate-x-1/2 w-32 h-1 bg-white rounded-full opacity-40 bottom-1"></div>
                 
                 <!-- 右图标 -->
                 <div class="ios-icon">
@@ -261,7 +259,7 @@
     </div>
 
     <!-- 4. 密码层 -->
-    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center safe-area-top pt-12 text-white">
+    <div id="passcode-screen" class="fixed inset-0 z-40 translate-y-full transition-transform duration-500 ease-out bg-black/40 backdrop-blur-xl flex flex-col items-center safe-area-top pt-12 text-white" style="height: 100dvh;">
         <div class="text-sm md:text-base mb-8 tracking-wide">Enter Passcode</div>
         <div class="flex gap-6 mb-20">
             <div class="w-3 h-3 rounded-full border border-white bg-transparent dot"></div>
@@ -287,7 +285,7 @@
     </div>
 
     <!-- 5. 结果展示层 -->
-    <div id="result-overlay" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-3xl perspective-container flex flex-col items-center justify-center p-4 transition-opacity duration-500 opacity-0">
+    <div id="result-overlay" class="fixed inset-0 z-50 hidden bg-black/95 backdrop-blur-3xl perspective-container flex flex-col items-center justify-center p-4 transition-opacity duration-500 opacity-0" style="height: 100dvh;">
         <div id="card-container" class="playing-card w-[85vw] max-w-[300px] h-[420px] md:w-[360px] md:h-[520px] relative overflow-hidden select-none">
             <div class="absolute inset-0 card-texture z-0"></div>
             <div class="card-inner-border"></div>
@@ -419,7 +417,7 @@
         function showPasscodeScreen() {
             isPasscodeActive = true;
             uiLayer.style.opacity = '0';
-            uiLayer.style.transform = 'translateY(-100vh)';
+            uiLayer.style.transform = 'translateY(-100dvh)'; /* 使用 dvh */
             passcodeScreen.classList.remove('translate-y-full'); passcodeScreen.classList.add('translate-y-0');
             document.querySelectorAll('.quadrant').forEach(q => q.style.pointerEvents = 'none');
         }
